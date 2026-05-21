@@ -29,6 +29,11 @@ _IROH_STATUS_MAPPINGS = {
 }
 
 
+_SINGLE_DASH_URL = (
+    "/d/chatmail-single/relay-network3a-single-relay?var-relay="
+)
+
+
 def state_timeline_panel(title, description, metric, legend_format,
                          status_mappings, gridPos):
     """Per-relay state-timeline of an integer status gauge."""
@@ -42,6 +47,10 @@ def state_timeline_panel(title, description, metric, legend_format,
             "defaults": {
                 "custom": {"lineWidth": 0, "fillOpacity": 70},
                 "mappings": [{"type": "value", "options": status_mappings}],
+                "links": [{
+                    "title": "Single relay view",
+                    "url": _SINGLE_DASH_URL + "${__field.labels.relay}",
+                }],
             },
         },
         "options": {
@@ -181,6 +190,13 @@ def failing_table_panel(title, description, expr, status_mappings,
                 "color": {"mode": "thresholds"},
             },
             "overrides": [
+                {"matcher": {"id": "byName", "options": "relay"},
+                 "properties": [
+                     {"id": "links", "value": [{
+                         "title": "Single relay view",
+                         "url": _SINGLE_DASH_URL + "${__data.fields.relay}",
+                     }]},
+                 ]},
                 {"matcher": {"id": "byName", "options": "Value"},
                  "properties": [
                      {"id": "custom.displayMode", "value": "color-background"},

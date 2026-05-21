@@ -98,6 +98,12 @@
                 }
               }
             }
+          ],
+          "links": [
+            {
+              "title": "Single relay view",
+              "url": "/d/chatmail-single/relay-network3a-single-relay?var-relay=${__field.labels.relay}"
+            }
           ]
         }
       },
@@ -310,6 +316,23 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "relay"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Single relay view",
+                    "url": "/d/chatmail-single/relay-network3a-single-relay?var-relay=${__data.fields.relay}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Value"
             },
             "properties": [
@@ -516,6 +539,12 @@
                   "color": "yellow"
                 }
               }
+            }
+          ],
+          "links": [
+            {
+              "title": "Single relay view",
+              "url": "/d/chatmail-single/relay-network3a-single-relay?var-relay=${__field.labels.relay}"
             }
           ]
         }
@@ -747,6 +776,23 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "relay"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Single relay view",
+                    "url": "/d/chatmail-single/relay-network3a-single-relay?var-relay=${__data.fields.relay}"
+                  }
+                ]
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
