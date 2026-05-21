@@ -28,6 +28,7 @@ from .orchestration import (
 )
 from .output import print_metrics, start_exporter_server, write_textfile
 from .probe import RelayPool
+from .turn import TurnResolved
 
 log = get_logger(__name__)
 
@@ -45,6 +46,20 @@ class _SupprRpcClosedFilter(logging.Filter):
                 and "RPC server closed" in str(record.getMessage())):
             return False  # suppress during shutdown
         return True
+
+
+def _parse_extra_turns(specs: list[str]) -> dict[str, TurnResolved]:
+    """Parse HOST:PORT:USER:CRED specs into a host -> TurnResolved map."""
+    result: dict[str, TurnResolved] = {}
+    for spec in specs:
+        try:
+            host, port_s, user, cred = spec.split(":", 3)
+            result[host] = (host, int(port_s), user, cred, "self")
+        except ValueError:
+            raise SystemExit(
+                f"CHATMAIL_EXTRA_TURN: bad spec {spec!r} (expected HOST:PORT:USER:CRED)"
+            )
+    return result
 
 
 def read_relay_list(paths: list[str]) -> list[str]:
@@ -264,6 +279,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "  examples: --reset all\n"
             "            --reset nine.testrun.org mailchat.pl"
         )
+    env_specs = os.environ.get("CHATMAIL_EXTRA_TURN", "").split()
+    args.extra_turn_map = _parse_extra_turns(env_specs)
     return args
 
 

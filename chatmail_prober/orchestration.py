@@ -41,7 +41,7 @@ from .metrics import (
 )
 from .output import write_textfile
 from .probe import ProbeResult, RelayPool, run_probe
-from .turn import TurnStatus, check_turn, resolve_relay_turn
+from .turn import TurnResolved, TurnStatus, check_turn, resolve_relay_turn
 
 log = get_logger(__name__)
 
@@ -135,21 +135,25 @@ def _get_relay_account(
 
 def _check_one_turn(
     pool: RelayPool, relay: str, timeout: float,
+    pre_resolved: TurnResolved | None = None,
 ) -> None:
-    """Resolve TURN coords for `relay` via its already-configured account
-    and run turnutils_uclient.  Writes metrics directly.
+    """Resolve TURN coords for `relay` and run turnutils_uclient.
+
+    When pre_resolved is provided (explicit --extra-turn entry), the
+    account/ice_servers lookup is skipped entirely.  Writes metrics directly.
     """
-    account = _get_relay_account(pool, relay, "turn_account_unavailable")
-    if account is None:
-        update_turn_metrics(relay, None)
-        return
-    resolved = resolve_relay_turn(account, relay)
-    if resolved is None:
-        update_turn_metrics(relay, None)
-        return
-    result = check_turn(resolved, timeout=timeout)
+    if pre_resolved is None:
+        account = _get_relay_account(pool, relay, "turn_account_unavailable")
+        if account is None:
+            update_turn_metrics(relay, None)
+            return
+        pre_resolved = resolve_relay_turn(account, relay)
+        if pre_resolved is None:
+            update_turn_metrics(relay, None)
+            return
+    result = check_turn(pre_resolved, timeout=timeout)
     update_turn_metrics(relay, result)
-    log.info("turn_check_done", relay=relay, endpoint=resolved[4],
+    log.info("turn_check_done", relay=relay, endpoint=pre_resolved[4],
              status=int(result.status_code),
              connect_s=result.run.connect_s,
              transmit_s=result.run.transmit_s)
@@ -216,23 +220,31 @@ def _run_turn_checks(
     alive_pool: RelayPool, alive_relays: list[str],
     args: argparse.Namespace,
 ) -> None:
-    """Fan out TURN health checks across alive relays."""
-    if not getattr(args, "check_turn", False) or not alive_relays:
+    """Fan out TURN health checks across alive relays and any --extra-turn hosts."""
+    extra: dict[str, TurnResolved] = getattr(args, "extra_turn_map", {})
+    if not getattr(args, "check_turn", False) and not extra:
+        return
+    # Relay-discovered targets only when --check-turn is set; extra hosts always.
+    relay_targets = list(alive_relays) if getattr(args, "check_turn", False) else []
+    for host in extra:
+        if host not in relay_targets:
+            relay_targets.append(host)
+    if not relay_targets:
         return
     if shutil.which("turnutils_uclient") is None:
         log.warning("turn_check_skipped",
                     reason="turnutils_uclient not installed (apt install coturn-utils)")
-        for relay in alive_relays:
+        for relay in relay_targets:
             relay_turn_status.labels(relay=relay, turn_endpoint="self").set(
                 TurnStatus.BINARY_MISSING,
             )
         return
     timeout = float(args.timeout // 2) if args.timeout else 30.0
     _run_aux_checks(
-        "turn", alive_pool, alive_relays,
-        workers=min(len(alive_relays), args.workers),
+        "turn", alive_pool, relay_targets,
+        workers=min(len(relay_targets), args.workers),
         deadline_s=timeout * 2,
-        submit=lambda ex, p, r: ex.submit(_check_one_turn, p, r, timeout),
+        submit=lambda ex, p, r: ex.submit(_check_one_turn, p, r, timeout, extra.get(r)),
         on_failure=lambda relay, _e: update_turn_metrics(relay, None),
         on_timeout=lambda relay: update_turn_metrics(relay, None),
     )
@@ -446,14 +458,15 @@ def check_relays_alive(
         log.warning("relays_unreachable", count=len(dead), relays=list(dead))
     # Update per-relay status metric; remove labels for relays dropped from config.
     # Include unreachable relays in the status metric so their recovery is visible.
-    all_known = list(relays) + list(unreachable_set)
-    clear_stale_relay_labels(all_known)
-    for r in all_known:
+    extra_turn_hosts = list(getattr(args, "extra_turn_map", {}).keys())
+    relay_known = list(relays) + list(unreachable_set)
+    clear_stale_relay_labels(relay_known + extra_turn_hosts)
+    for r in relay_known:
         relay_status.labels(relay=r).set(_cached_status(r, dead.get(r)))
     elapsed = time.monotonic() - check_start
     log.warning("alive_check_complete",
                 elapsed_s=round(elapsed, 1),
-                online=len(alive), total=len(all_known))
+                online=len(alive), total=len(relay_known))
     return alive, dead
 
 
