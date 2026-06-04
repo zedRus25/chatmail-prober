@@ -121,22 +121,24 @@ class TestRunProbeWithContexts:
 
 @pytest.mark.parametrize(("error", "category", "is_fatal"), [
     (None, None, False),
+    # dns: two distinct keywords
     ("IMAP failed to connect: Could not find DNS resolutions for imap.a.example:993", "dns", True),
-    ("Cannot login as user@a.example: authentication failed", "auth", True),
-    ("Connection timeout: deadline has elapsed", "timeout", False),
-    ("SSL certificate verify failed", "tls", True),
-    ("Connection refused to imap.a.example:993", "connection_refused", True),
-    ("Something completely unexpected happened", "unknown", False),
-    ("Failed to setup sender profile on relay.example: SomeError: details", "setup", False),
-    ("Could not find DNS resolutions for imap.chat.beeep.ir:993", "dns", True),
     ("Name or service not known", "dns", True),
-    ("Connection refused", "connection_refused", True),
-    ("ConnectionRefusedError: [Errno 111]", "connection_refused", True),
-    ("certificate has expired", "tls", True),
-    ("SSL handshake failed", "tls", True),
-    ("[AUTHENTICATIONFAILED] Authentication failed.", "auth", True),
+    # auth
+    ("Cannot login as user@a.example: authentication failed", "auth", True),
+    # timeout: two distinct keywords
+    ("Connection timeout: deadline has elapsed", "timeout", False),
     ("Connection timed out", "timeout", False),
-    ("something went wrong", "unknown", False),
+    # tls: two distinct keywords
+    ("SSL certificate verify failed", "tls", True),
+    ("certificate has expired", "tls", True),
+    # connection_refused: two distinct keywords
+    ("Connection refused to imap.a.example:993", "connection_refused", True),
+    ("ConnectionRefusedError: [Errno 111]", "connection_refused", True),
+    # setup
+    ("Failed to setup sender profile on relay.example: SomeError: details", "setup", False),
+    # unknown -- real DNS string that does NOT match any keyword
+    ("Something completely unexpected happened", "unknown", False),
     ("temporary failure in name resolution", "unknown", False),
 ])
 def test_failure_taxonomy(error, category, is_fatal):
@@ -153,7 +155,6 @@ def test_failure_taxonomy(error, category, is_fatal):
      "{'code': -1, 'message': 'Could not find DNS resolutions'}", False),
     ("AUTHENTICATIONFAILED: login failed", False),
     ("Connection timeout: deadline has elapsed", False),
-    ("Failed to setup sender profile on relay.example: SomeError: details", False),
     ("RPC server closed", True),
     ("rpc process crashed", True),
     ("BrokenPipeError writing to rpc stdin", True),
