@@ -116,9 +116,9 @@ class TestWaitAccountOnlineTimeout:
     def test_timeout_raises_classified_ping_error(self):
         """No event in queue -> PingError with correct message and relay_status_value -1."""
         rpc = _Rpc()
-        dc = _DC(rpc, "hostc.zzz")
+        dc = _DC(rpc, "relay.example")
         maker = AccountMaker(dc)
-        account = _Account(rpc, 1, "hostc.zzz")
+        account = _Account(rpc, 1, "relay.example")
 
         with pytest.raises(PingError) as exc_info:
             maker.wait_account_online(account, timeout=0.15)

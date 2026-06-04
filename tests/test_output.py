@@ -30,7 +30,7 @@ def _clear_output_metrics():
 class TestWriteTextfile:
     def test_writes_valid_prom_file(self, tmp_path):
         # Feed some data into metrics first
-        result = ProbeResult("a.test", "b.test", sent=3, received=3, loss=0.0,
+        result = ProbeResult("a.example", "b.example", sent=3, received=3, loss=0.0,
                              rtts_ms=[100.0, 200.0, 300.0])
         update_metrics(result)
 
@@ -75,12 +75,12 @@ class TestWriteTextfile:
         node_exporter silently drop the file.
         """
         results = [
-            ProbeResult("a.test", "b.test", sent=3, received=3, loss=0.0,
+            ProbeResult("a.example", "b.example", sent=3, received=3, loss=0.0,
                         rtts_ms=[100.0, 200.0, 300.0],
                         account_setup_time=1.5, message_time=0.8),
-            ProbeResult("a.test", "a.test", sent=3, received=2, loss=33.3,
+            ProbeResult("a.example", "a.example", sent=3, received=2, loss=33.3,
                         rtts_ms=[110.0, 220.0]),
-            ProbeResult("b.test", "a.test", error="Connection timeout"),
+            ProbeResult("b.example", "a.example", error="Connection timeout"),
         ]
         for r in results:
             update_metrics(r)

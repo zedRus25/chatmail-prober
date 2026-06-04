@@ -15,18 +15,18 @@ from chatmail_prober.__main__ import read_exclude_list, read_relay_list
 class TestReadRelayList:
     def test_reads_domains(self, tmp_path):
         f = tmp_path / "relays.txt"
-        f.write_text("nine.testrun.org\nmehl.cloud\ntarpit.fun\n")
-        assert read_relay_list([str(f)]) == ["nine.testrun.org", "mehl.cloud", "tarpit.fun"]
+        f.write_text("a.example\nb.example\nc.example\n")
+        assert read_relay_list([str(f)]) == ["a.example", "b.example", "c.example"]
 
     def test_ignores_comments_and_blanks(self, tmp_path):
         f = tmp_path / "relays.txt"
-        f.write_text("# comment\nnine.testrun.org\n\n  \n# another\nmehl.cloud\n")
-        assert read_relay_list([str(f)]) == ["nine.testrun.org", "mehl.cloud"]
+        f.write_text("# comment\na.example\n\n  \n# another\nb.example\n")
+        assert read_relay_list([str(f)]) == ["a.example", "b.example"]
 
     def test_strips_whitespace(self, tmp_path):
         f = tmp_path / "relays.txt"
-        f.write_text("  nine.testrun.org  \n  mehl.cloud\t\n")
-        assert read_relay_list([str(f)]) == ["nine.testrun.org", "mehl.cloud"]
+        f.write_text("  a.example  \n  b.example\t\n")
+        assert read_relay_list([str(f)]) == ["a.example", "b.example"]
 
     def test_empty_file_exits(self, tmp_path):
         f = tmp_path / "relays.txt"
@@ -36,16 +36,16 @@ class TestReadRelayList:
 
     def test_single_relay(self, tmp_path):
         f = tmp_path / "relays.txt"
-        f.write_text("nine.testrun.org\n")
-        assert read_relay_list([str(f)]) == ["nine.testrun.org"]
+        f.write_text("a.example\n")
+        assert read_relay_list([str(f)]) == ["a.example"]
 
     def test_multiple_files_merged_and_deduplicated(self, tmp_path):
         f1 = tmp_path / "a.txt"
-        f1.write_text("nine.testrun.org\nmehl.cloud\n")
+        f1.write_text("a.example\nb.example\n")
         f2 = tmp_path / "b.txt"
-        f2.write_text("mehl.cloud\ntarpit.fun\n")
+        f2.write_text("b.example\nc.example\n")
         assert read_relay_list([str(f1), str(f2)]) == [
-            "nine.testrun.org", "mehl.cloud", "tarpit.fun"
+            "a.example", "b.example", "c.example"
         ]
 
 

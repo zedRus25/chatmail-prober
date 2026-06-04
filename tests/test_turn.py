@@ -89,7 +89,7 @@ def test_resolve_prefers_ipv4_over_ipv6():
             "credential": "abc=",
         },
     ])
-    result = resolve_relay_turn(acct, "nine.testrun.org")
+    result = resolve_relay_turn(acct, "relay.example")
     assert result is not None
     host, port, _, _, kind = result
     assert host == "77.42.49.41"

@@ -4,7 +4,7 @@ cli_summary.render(results, alive_relays, dead_relays, elapsed_s) must
 produce a compact table where each probe pair occupies one row:
 
   Route                                    Sent  Recv  Loss    p50    p90    p99   mdev      Setup       Msg
-  nine.testrun.org -> nine.testrun.org        3     3   0.0%  2271   2316   2326    431  4850.00ms  3240.00ms
+  a.example -> a.example        3     3   0.0%  2271   2316   2326    431  4850.00ms  3240.00ms
   ...
 
 Failed rows show the failure category in the p50 column and dashes for
@@ -68,10 +68,10 @@ def test_table_header_present(header):
 
 class TestSuccessRows:
     def test_route_present(self):
-        out = _render([_ok("nine.testrun.org", "mailchat.pl")],
-                      ["nine.testrun.org", "mailchat.pl"], [], elapsed_s=5.0)
-        assert "nine.testrun.org" in out
-        assert "mailchat.pl" in out
+        out = _render([_ok("a.example", "b.example")],
+                      ["a.example", "b.example"], [], elapsed_s=5.0)
+        assert "a.example" in out
+        assert "b.example" in out
 
     def test_zero_loss(self):
         out = _render([_ok()], ["a.example", "b.example"], [], elapsed_s=5.0)
@@ -159,10 +159,10 @@ class TestDeadRelayTable:
     is rendered below the probe table."""
 
     def test_dead_relay_table(self):
-        dead = {"owo.void.my": "AUTHENTICATIONFAILED: login failed"}
+        dead = {"gone.example": "AUTHENTICATIONFAILED: login failed"}
         out = _render([_ok()], ["a.example"], dead, elapsed_s=5.0)
         assert "Host" in out and "Error" in out
-        assert "owo.void.my" in out
+        assert "gone.example" in out
         assert "AUTHENTICATIONFAILED" in out
 
     def test_no_dead_table_when_all_alive(self):

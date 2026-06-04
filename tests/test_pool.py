@@ -17,30 +17,30 @@ class TestRelayPool:
     @patch("chatmail_prober.pool.Rpc")
     def test_open_all_deduplicates_rpc_and_unions_relays(self, MockRpc, tmp_path):
         pool = RelayPool(tmp_path)
-        pool.open_all(["a.test", "b.test"])
-        pool.open_all(["a.test", "c.test"])
+        pool.open_all(["a.example", "b.example"])
+        pool.open_all(["a.example", "c.example"])
         MockRpc.assert_called_once()
-        assert set(pool.contexts().keys()) == {"a.test", "b.test", "c.test"}
+        assert set(pool.contexts().keys()) == {"a.example", "b.example", "c.example"}
 
     @patch("chatmail_prober.pool.Rpc")
     def test_reopen_restarts_rpc_and_keeps_relays(self, MockRpc, tmp_path):
         pool = RelayPool(tmp_path)
-        pool.open_all(["a.test"])
+        pool.open_all(["a.example"])
         pool.reopen()
         assert MockRpc.call_count == 2
-        assert "a.test" in pool.contexts()
+        assert "a.example" in pool.contexts()
 
     @patch("chatmail_prober.pool.Rpc")
     def test_prune_forgets_relays(self, MockRpc, tmp_path):
         pool = RelayPool(tmp_path)
-        pool.open_all(["a.test", "b.test", "c.test"])
-        pool.prune(["a.test", "c.test"])
-        assert set(pool.contexts().keys()) == {"a.test", "c.test"}
+        pool.open_all(["a.example", "b.example", "c.example"])
+        pool.prune(["a.example", "c.example"])
+        assert set(pool.contexts().keys()) == {"a.example", "c.example"}
 
     @patch("chatmail_prober.pool.Rpc")
     def test_contexts_duck_type_for_perform_direct_ping(self, MockRpc, tmp_path):
         """Each context yielded by the pool must expose .maker (consumed by _perform_direct_ping)."""
         pool = RelayPool(tmp_path)
-        pool.open_all(["a.test"])
-        ctx = pool.contexts()["a.test"]
+        pool.open_all(["a.example"])
+        ctx = pool.contexts()["a.example"]
         assert ctx.maker is pool.maker is not None

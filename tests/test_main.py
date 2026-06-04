@@ -274,7 +274,7 @@ class TestRunRound:
                        accounts_dir="", timeout=10, relay_contexts=None):
             return ProbeResult(
                 source, dest,
-                error="Could not find DNS resolutions for imap.host:993",
+                error="Could not find DNS resolutions for imap.a.example:993",
             )
 
         monkeypatch.setattr(
@@ -434,21 +434,21 @@ class TestCheckRelaysAlive:
         def _always_timeout(source, dest, count=1, interval=0.1,
                             accounts_dir="", timeout=10, relay_contexts=None):
             call_count[source] = call_count.get(source, 0) + 1
-            if source == "known.dead":
+            if source == "known-dead.example":
                 return ProbeResult(source, dest, error="timeout")
             return ProbeResult(source, dest, sent=1, received=1,
                                loss=0.0, rtts_ms=[100.0])
 
         monkeypatch.setattr("chatmail_prober.orchestration.run_probe", _always_timeout)
         monkeypatch.setattr("chatmail_prober.orchestration.time.sleep", lambda _: None)
-        relays = ["a.example", "known.dead"]
+        relays = ["a.example", "known-dead.example"]
         args = _make_args(tmp_path, workers=3)
         alive, dead_set = check_relays_alive(
-            relays, args, Path(args.cache_dir), previously_dead={"known.dead": "timeout"})
+            relays, args, Path(args.cache_dir), previously_dead={"known-dead.example": "timeout"})
 
-        assert "known.dead" not in alive
-        assert "known.dead" in dead_set  # dict membership check works on keys
-        assert call_count["known.dead"] == 1  # initial only, no retries
+        assert "known-dead.example" not in alive
+        assert "known-dead.example" in dead_set  # dict membership check works on keys
+        assert call_count["known-dead.example"] == 1  # initial only, no retries
 
     def test_previously_dead_recovery_detected(self, tmp_path, monkeypatch, fresh_metrics):
         """A previously-dead relay that now succeeds is included."""
@@ -494,10 +494,10 @@ class TestRunRoundExclude:
 
 def _run_main_once(tmp_path, extra_flags=()):
     relay_file = tmp_path / "relays.txt"
-    relay_file.write_text("nine.testrun.org\n")
+    relay_file.write_text("a.example\n")
     argv = [str(relay_file), "--once"] + list(extra_flags)
     with patch("chatmail_prober.__main__.check_relays_alive",
-               return_value=(["nine.testrun.org"], set())), \
+               return_value=(["a.example"], set())), \
          patch("chatmail_prober.__main__.run_round",
                return_value=(0.1, [])), \
          patch("chatmail_prober.__main__.render_summary") as mock_render, \
@@ -529,8 +529,8 @@ class TestPrintMetrics:
 
 class TestOptionalRelayFile:
     def test_hosts_flag_needs_no_relay_file(self):
-        args = parse_args(["-H", "nine.testrun.org"])
-        assert args.hosts == "nine.testrun.org"
+        args = parse_args(["-H", "a.example"])
+        assert args.hosts == "a.example"
         assert args.relays == []
 
     def test_reset_needs_no_relay_file(self):
@@ -553,12 +553,12 @@ class TestOptionalRelayFile:
         cache = tmp_path / "cache"
         cache.mkdir()
         with patch("chatmail_prober.__main__.check_relays_alive",
-                   return_value=(["nine.testrun.org"], set())), \
+                   return_value=(["a.example"], set())), \
              patch("chatmail_prober.__main__.run_round", return_value=(0.1, [])), \
              patch("chatmail_prober.__main__.render_summary"), \
              patch("chatmail_prober.__main__.write_textfile"), \
              patch("chatmail_prober.__main__.print_metrics"):
-            main(["-H", "nine.testrun.org", "--once",
+            main(["-H", "a.example", "--once",
                   "--cache-dir", str(cache)])
 
 
@@ -599,25 +599,25 @@ def clear_metrics():
 
 _ALIVE_CHECK_CASES = [
     (
-        "host.abc",
-        "Failed to setup sender profile on host.abc: JsonRpcError: "
+        "dns.example",
+        "Failed to setup sender profile on dns.example: JsonRpcError: "
         "{'code': -1, 'message': 'Error: IMAP failed to connect to "
-        "imap.host.abc:993:tls: Could not find DNS resolutions for "
-        "imap.host.abc:993. Check server hostname and your network'}",
+        "imap.dns.example:993:tls: Could not find DNS resolutions for "
+        "imap.dns.example:993. Check server hostname and your network'}",
         -6.0,
     ),
     (
-        "hostb.xyz",
-        "Failed to setup sender profile on hostb.xyz: JsonRpcError: "
+        "auth.example",
+        "Failed to setup sender profile on auth.example: JsonRpcError: "
         "{'code': -1, 'message': 'Error: Cannot login as "
-        '"user@hostb.xyz". [AUTHENTICATIONFAILED] Authentication failed.\'}',
+        '"user@auth.example". [AUTHENTICATIONFAILED] Authentication failed.\'}',
         -3.0,
     ),
     (
-        "hostd.xyz",
-        "Failed to setup sender profile on hostd.xyz: JsonRpcError: "
+        "timeout.example",
+        "Failed to setup sender profile on timeout.example: JsonRpcError: "
         "{'code': -1, 'message': 'Error: IMAP failed to connect to "
-        "hostd.xyz:993:tls: Connection timeout: deadline has elapsed'}",
+        "timeout.example:993:tls: Connection timeout: deadline has elapsed'}",
         -1.0,
     ),
 ]
@@ -684,15 +684,15 @@ class TestReopenGuard:
 
     def test_dns_error_does_not_reopen(self, tmp_path, monkeypatch, clear_metrics):
         calls = self._run_with_tracking_pool(
-            tmp_path, monkeypatch, "host.abc",
-            "Failed to setup: Could not find DNS resolutions for imap.host.abc:993",
+            tmp_path, monkeypatch, "dns.example",
+            "Failed to setup: Could not find DNS resolutions for imap.dns.example:993",
         )
         assert calls == []
 
     def test_timeout_does_not_reopen(self, tmp_path, monkeypatch, clear_metrics):
         calls = self._run_with_tracking_pool(
-            tmp_path, monkeypatch, "hostc.zzz",
-            "Timeout waiting for user@hostc.zzz to come online",
+            tmp_path, monkeypatch, "relay.example",
+            "Timeout waiting for user@relay.example to come online",
         )
         assert calls == []
 

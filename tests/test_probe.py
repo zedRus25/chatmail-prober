@@ -35,12 +35,12 @@ class TestRunProbeSuccess:
     @patch("chatmail_prober.probe._perform_direct_ping")
     def test_returns_probe_result(self, mock_ping):
         mock_ping.return_value = FakePinger()
-        contexts = {"a.test": MagicMock(), "b.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=3, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock(), "b.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=3, relay_contexts=contexts)
 
         assert isinstance(result, ProbeResult)
-        assert result.source == "a.test"
-        assert result.destination == "b.test"
+        assert result.source == "a.example"
+        assert result.destination == "b.example"
         assert result.sent == 3
         assert result.received == 3
         assert result.loss == 0.0
@@ -51,8 +51,8 @@ class TestRunProbeSuccess:
         mock_ping.return_value = FakePinger(
             results=[(0, 123.4), (1, 567.8)]
         )
-        contexts = {"a.test": MagicMock(), "b.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=2, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock(), "b.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=2, relay_contexts=contexts)
         assert result.rtts_ms == [123.4, 567.8]
 
     @patch("chatmail_prober.probe._perform_direct_ping")
@@ -60,8 +60,8 @@ class TestRunProbeSuccess:
         mock_ping.return_value = FakePinger(
             account_setup_time=1.1, message_time=3.3,
         )
-        contexts = {"a.test": MagicMock(), "b.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=3, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock(), "b.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=3, relay_contexts=contexts)
         assert result.account_setup_time == pytest.approx(1.1)
         assert result.message_time == pytest.approx(3.3)
 
@@ -70,8 +70,8 @@ class TestRunProbeErrors:
     @patch("chatmail_prober.probe._perform_direct_ping")
     def test_ping_error_returns_error_result(self, mock_ping):
         mock_ping.side_effect = PingError("setup failed")
-        contexts = {"a.test": MagicMock(), "b.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=1, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock(), "b.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=1, relay_contexts=contexts)
 
         assert result.error == "setup failed"
         assert result.sent == 0
@@ -82,8 +82,8 @@ class TestRunProbeErrors:
     @patch("chatmail_prober.probe._perform_direct_ping")
     def test_unexpected_exception_returns_error_result(self, mock_ping):
         mock_ping.side_effect = RuntimeError("something broke")
-        contexts = {"a.test": MagicMock(), "b.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=1, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock(), "b.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=1, relay_contexts=contexts)
 
         assert result.error == "something broke"
         assert result.sent == 0
@@ -103,8 +103,8 @@ class TestRunProbeWithContexts:
     @patch("chatmail_prober.probe._perform_direct_ping")
     def test_error_with_contexts(self, mock_ping):
         mock_ping.side_effect = PingError("rpc failed")
-        contexts = {"a.test": MagicMock()}
-        result = run_probe("a.test", "b.test", count=1, relay_contexts=contexts)
+        contexts = {"a.example": MagicMock()}
+        result = run_probe("a.example", "b.example", count=1, relay_contexts=contexts)
 
         assert result.error == "rpc failed"
 
@@ -113,7 +113,7 @@ class TestRunProbeWithContexts:
     def test_without_contexts_creates_temporary(self, mock_ping, MockCtx):
         """When relay_contexts is None, creates temporary RelayContexts."""
         mock_ping.return_value = FakePinger()
-        result = run_probe("a.test", "b.test", count=3, accounts_dir="/tmp/c")
+        result = run_probe("a.example", "b.example", count=3, accounts_dir="/tmp/c")
 
         mock_ping.assert_called_once()
         assert result.sent == 3
@@ -151,7 +151,7 @@ def test_failure_taxonomy(error, category, is_fatal):
 
 
 @pytest.mark.parametrize(("error", "is_crash"), [
-    ("Failed to setup sender profile on host.abc: JsonRpcError: "
+    ("Failed to setup sender profile on dns.example: JsonRpcError: "
      "{'code': -1, 'message': 'Could not find DNS resolutions'}", False),
     ("AUTHENTICATIONFAILED: login failed", False),
     ("Connection timeout: deadline has elapsed", False),
@@ -175,7 +175,7 @@ def test_rpc_crash_classification(error, is_crash):
     ("192.168.1.1", True),
     ("::1", True),
     ("2001:db8::1", True),
-    ("nine.testrun.org", False),
+    ("relay.example", False),
     ("", False),
 ])
 def test_is_ip_address(host, expected):
@@ -184,7 +184,7 @@ def test_is_ip_address(host, expected):
 
 class TestCreateQrUrl:
     def test_domain_produces_dcaccount_url(self):
-        assert create_qr_url("nine.testrun.org") == "dcaccount:nine.testrun.org"
+        assert create_qr_url("relay.example") == "dcaccount:relay.example"
 
     def test_ip_produces_dclogin_url(self):
         url = create_qr_url("192.168.1.1")
@@ -211,7 +211,7 @@ class TestCreateQrUrl:
 #
 
 
-def _dns_error(host: str = "imap.host.abc", port: int = 993) -> JsonRpcError:
+def _dns_error(host: str = "imap.dns.example", port: int = 993) -> JsonRpcError:
     return JsonRpcError({
         "code": -1,
         "message": (
@@ -222,7 +222,7 @@ def _dns_error(host: str = "imap.host.abc", port: int = 993) -> JsonRpcError:
     })
 
 
-def _auth_error(addr: str = "wjfjpcxib@hostb.xyz") -> JsonRpcError:
+def _auth_error(addr: str = "user@auth.example") -> JsonRpcError:
     return JsonRpcError({
         "code": -1,
         "message": (
@@ -233,7 +233,7 @@ def _auth_error(addr: str = "wjfjpcxib@hostb.xyz") -> JsonRpcError:
     })
 
 
-def _timeout_error(host: str = "hostd.xyz") -> JsonRpcError:
+def _timeout_error(host: str = "timeout.example") -> JsonRpcError:
     return JsonRpcError({
         "code": -1,
         "message": (

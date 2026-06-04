@@ -191,13 +191,13 @@ def test_update_iroh_metrics_ok_sets_latency():
         relay_iroh_status,
         update_iroh_metrics,
     )
-    update_iroh_metrics("relay-ok.test", IrohResult(
+    update_iroh_metrics("relay-ok.example", IrohResult(
         status=IrohStatus.OK, url="https://x/", latency_s=0.123,
         http_status=200,
     ))
-    assert relay_iroh_status.labels(relay="relay-ok.test")._value.get() == 1
+    assert relay_iroh_status.labels(relay="relay-ok.example")._value.get() == 1
     assert (
-        relay_iroh_latency_seconds.labels(relay="relay-ok.test")._value.get()
+        relay_iroh_latency_seconds.labels(relay="relay-ok.example")._value.get()
         == 0.123
     )
 
@@ -208,7 +208,7 @@ def test_update_iroh_metrics_no_metadata_skips_latency():
         relay_iroh_status,
         update_iroh_metrics,
     )
-    relay = "relay-nometa.test"
+    relay = "relay-nometa.example"
     # Pre-set latency to a sentinel, confirm it is NOT overwritten.
     relay_iroh_latency_seconds.labels(relay=relay).set(99.0)
     update_iroh_metrics(relay, IrohResult(status=IrohStatus.NO_METADATA))

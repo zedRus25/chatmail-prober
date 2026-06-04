@@ -23,7 +23,7 @@ from chatmail_prober.__main__ import parse_args, reset_accounts
 #
 
 def _make_cache(tmp_path: Path, workers: int = 2,
-                domains: tuple[str, ...] = ("nine.testrun.org", "mailchat.pl")) -> Path:
+                domains: tuple[str, ...] = ("a.example", "b.example")) -> Path:
     """Create a fake cache directory tree."""
     cache = tmp_path / "cache"
     for i in range(workers):
@@ -41,26 +41,26 @@ def _make_cache(tmp_path: Path, workers: int = 2,
 class TestResetArgParsing:
     def test_reset_all_keyword(self, tmp_path):
         relay_file = tmp_path / "r.txt"
-        relay_file.write_text("nine.testrun.org\n")
+        relay_file.write_text("a.example\n")
         args = parse_args([str(relay_file), "--reset", "all"])
         assert args.reset == ["all"]
 
     def test_reset_with_domains(self, tmp_path):
         relay_file = tmp_path / "r.txt"
-        relay_file.write_text("nine.testrun.org\n")
-        args = parse_args([str(relay_file), "--reset", "nine.testrun.org", "mailchat.pl"])
-        assert args.reset == ["nine.testrun.org", "mailchat.pl"]
+        relay_file.write_text("a.example\n")
+        args = parse_args([str(relay_file), "--reset", "a.example", "b.example"])
+        assert args.reset == ["a.example", "b.example"]
 
     def test_reset_default_is_none(self, tmp_path):
         relay_file = tmp_path / "r.txt"
-        relay_file.write_text("nine.testrun.org\n")
+        relay_file.write_text("a.example\n")
         args = parse_args([str(relay_file)])
         assert args.reset is None
 
     def test_reset_bare_raises_system_exit(self, tmp_path):
         """--reset with no args must exit with an error message."""
         relay_file = tmp_path / "r.txt"
-        relay_file.write_text("nine.testrun.org\n")
+        relay_file.write_text("a.example\n")
         with pytest.raises(SystemExit) as exc_info:
             parse_args([str(relay_file), "--reset"])
         assert exc_info.value.code != 0
@@ -82,7 +82,7 @@ class TestResetAccountsFunction:
         """Selective per-domain reset is not supported under the flat layout."""
         cache = _make_cache(tmp_path)
         with pytest.raises(SystemExit) as exc_info:
-            reset_accounts(cache, domains=["nine.testrun.org"])
+            reset_accounts(cache, domains=["a.example"])
         # Message should point users at cleanup_accounts.py
         assert "cleanup_accounts" in str(exc_info.value)
 

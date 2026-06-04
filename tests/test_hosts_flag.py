@@ -15,7 +15,7 @@ from chatmail_prober.__main__ import _bracket_ipv6, parse_args
 @pytest.fixture()
 def relay_file(tmp_path):
     f = tmp_path / "r.txt"
-    f.write_text("nine.testrun.org\n")
+    f.write_text("relay.example\n")
     return str(f)
 
 
@@ -43,7 +43,7 @@ class TestHostsFlag:
     ("2001:db8::1", "[2001:db8::1]"),
     ("[::1]", "[::1]"),
     ("192.168.1.1", "192.168.1.1"),
-    ("nine.testrun.org", "nine.testrun.org"),
+    ("relay.example", "relay.example"),
 ])
 def test_bracket_ipv6(host, expected):
     assert _bracket_ipv6(host) == expected
@@ -58,7 +58,7 @@ class TestShortAliases:
 
     def _args(self, *flags):
         with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", delete=False) as f:
-            f.write("nine.testrun.org\n")
+            f.write("relay.example\n")
             name = f.name
         try:
             return parse_args([name] + list(flags))

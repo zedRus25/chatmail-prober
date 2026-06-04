@@ -30,25 +30,25 @@ def _account_with(config: dict[str, str | None]) -> MagicMock:
 
 def test_creds_from_account_complete():
     acct = _account_with({
-        "configured_addr": "u@nine.testrun.org",
+        "configured_addr": "u@relay.example",
         "mail_pw": "secret",
     })
     creds = creds_from_account(acct)
-    assert creds == ImapCreds("nine.testrun.org", 993, "u@nine.testrun.org", "secret")
+    assert creds == ImapCreds("relay.example", 993, "u@relay.example", "secret")
 
 
 def test_creds_from_account_falls_back_to_addr_when_configured_addr_missing():
     acct = _account_with({
-        "addr": "u@nine.testrun.org",
+        "addr": "u@relay.example",
         "mail_pw": "secret",
     })
     assert creds_from_account(acct) == ImapCreds(
-        "nine.testrun.org", 993, "u@nine.testrun.org", "secret",
+        "relay.example", 993, "u@relay.example", "secret",
     )
 
 
 def test_creds_from_account_missing_password():
-    acct = _account_with({"configured_addr": "u@nine.testrun.org"})
+    acct = _account_with({"configured_addr": "u@relay.example"})
     assert creds_from_account(acct) is None
 
 
