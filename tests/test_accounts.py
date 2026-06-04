@@ -157,6 +157,39 @@ class TestWaitAccountOnlineTimeout:
         threading.Thread(target=_push_sequence, daemon=True).start()
         maker.wait_account_online(account, timeout=0.5)  # must not raise
 
+    def test_fatal_error_event_raises_immediately(self):
+        """An ERROR event with a fatal message must raise PingError before the timeout."""
+        rpc = _Rpc()
+        dc = _DC(rpc, "relay.example")
+        maker = AccountMaker(dc)
+        account = _Account(rpc, 1, "relay.example")
+
+        def push_fatal():
+            time.sleep(0.02)
+            rpc.get_queue(account.id).put(
+                {"kind": EventType.ERROR, "msg": "[AUTHENTICATIONFAILED] Authentication failed."}
+            )
+        threading.Thread(target=push_fatal, daemon=True).start()
+
+        with pytest.raises(PingError, match="AUTHENTICATIONFAILED"):
+            maker.wait_account_online(account, timeout=2.0)  # long timeout; must fire fast
+
+    def test_non_fatal_error_event_continues_waiting(self):
+        """A non-fatal ERROR event must not stop waiting; IMAP_INBOX_IDLE still resolves it."""
+        rpc = _Rpc()
+        dc = _DC(rpc, "relay.example")
+        maker = AccountMaker(dc)
+        account = _Account(rpc, 1, "relay.example")
+
+        def push_sequence():
+            time.sleep(0.02)
+            rpc.get_queue(account.id).put({"kind": EventType.ERROR, "msg": "INFO: connecting"})
+            time.sleep(0.02)
+            rpc.get_queue(account.id).put({"kind": EventType.IMAP_INBOX_IDLE})
+        threading.Thread(target=push_sequence, daemon=True).start()
+
+        maker.wait_account_online(account, timeout=1.0)  # must not raise
+
 
 #
 # Tests: account reuse via get_relay_account

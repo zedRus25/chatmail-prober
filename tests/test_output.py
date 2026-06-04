@@ -1,11 +1,30 @@
 """Tests for textfile output (atomic write)."""
 
+import pytest
 
 from prometheus_client.parser import text_string_to_metric_families
 
-from chatmail_prober.metrics import update_metrics
+from chatmail_prober.metrics import (
+    account_setup_seconds,
+    probe_loss_ratio,
+    probe_success,
+    rtt_median,
+    rtt_p10,
+    rtt_p90,
+    rtt_stddev,
+    send_errors_total,
+    update_metrics,
+)
 from chatmail_prober.output import write_textfile
 from chatmail_prober.probe import ProbeResult
+
+
+@pytest.fixture(autouse=True)
+def _clear_output_metrics():
+    for m in [rtt_median, rtt_stddev, rtt_p90, rtt_p10,
+              probe_success, probe_loss_ratio, account_setup_seconds, send_errors_total]:
+        m._metrics.clear()
+    yield
 
 
 class TestWriteTextfile:

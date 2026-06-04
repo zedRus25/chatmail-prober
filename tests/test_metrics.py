@@ -70,6 +70,24 @@ class TestUpdateMetricsSuccess:
         metrics_mod.update_metrics(result)
         assert metrics_mod.rtt_stddev.labels(**_labels())._value.get() == 0.0
 
+    def test_zero_sent_no_error_records_failure(self):
+        result = ProbeResult("a.example", "b.example", sent=0, received=0, loss=0.0)
+        metrics_mod.update_metrics(result)
+        assert metrics_mod.probe_success.labels(**_labels())._value.get() == 0.0
+        assert metrics_mod.probe_loss_ratio.labels(**_labels())._value.get() == 1.0
+
+    def test_empty_rtts_no_error_leaves_rtt_gauges_unchanged(self):
+        """RTT gauges are not updated when rtts_ms is empty; old values survive."""
+        lbl = _labels()
+        first = ProbeResult("a.example", "b.example", sent=3, received=3, loss=0.0,
+                            rtts_ms=[100.0, 200.0, 300.0])
+        metrics_mod.update_metrics(first)
+        prior = metrics_mod.rtt_median.labels(**lbl)._value.get()
+
+        second = ProbeResult("a.example", "b.example", sent=1, received=0, loss=100.0)
+        metrics_mod.update_metrics(second)
+        assert metrics_mod.rtt_median.labels(**lbl)._value.get() == prior
+
 
 class TestUpdateMetricsError:
     def test_error_increments_send_errors(self):
@@ -187,6 +205,7 @@ class TestRelayStatusMetric:
         assert metrics_mod.relay_status_value("connection refused") == -5
         assert metrics_mod.relay_status_value("name or service not known") == -6  # DNS fail
         assert metrics_mod.relay_status_value("unknown error") == 0
+        assert metrics_mod.relay_status_value("Failed to setup sender profile: SomeError") == -2
 
 
 class TestVerifyRelayStatus:
@@ -286,6 +305,11 @@ class TestIsTransientAliveError:
     def test_tls_not_transient(self):
         assert metrics_mod.is_transient_alive_error(
             "a.example", "certificate has expired"
+        ) is False
+
+    def test_setup_error_not_transient(self):
+        assert metrics_mod.is_transient_alive_error(
+            "a.example", "Failed to setup profile: SomeError"
         ) is False
 
 

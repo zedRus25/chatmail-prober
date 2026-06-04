@@ -18,6 +18,14 @@ from chatmail_prober.iroh import (
     check_relay_iroh,
     resolve_iroh_url,
 )
+from chatmail_prober.metrics import relay_iroh_latency_seconds, relay_iroh_status
+
+
+@pytest.fixture(autouse=True)
+def _clear_iroh_metrics():
+    relay_iroh_status._metrics.clear()
+    relay_iroh_latency_seconds._metrics.clear()
+    yield
 
 
 #
