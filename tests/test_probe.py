@@ -119,28 +119,52 @@ class TestRunProbeWithContexts:
         assert result.sent == 3
 
 
-class TestFatalCategories:
-    """Verify that _FATAL_CATEGORIES correctly separates fatal from transient errors."""
+@pytest.mark.parametrize(("error", "category", "is_fatal"), [
+    (None, None, False),
+    ("IMAP failed to connect: Could not find DNS resolutions for imap.a.example:993", "dns", True),
+    ("Cannot login as user@a.example: authentication failed", "auth", True),
+    ("Connection timeout: deadline has elapsed", "timeout", False),
+    ("SSL certificate verify failed", "tls", True),
+    ("Connection refused to imap.a.example:993", "connection_refused", True),
+    ("Something completely unexpected happened", "unknown", False),
+    ("Failed to setup sender profile on relay.example: SomeError: details", "setup", False),
+    ("Could not find DNS resolutions for imap.chat.beeep.ir:993", "dns", True),
+    ("Name or service not known", "dns", True),
+    ("Connection refused", "connection_refused", True),
+    ("ConnectionRefusedError: [Errno 111]", "connection_refused", True),
+    ("certificate has expired", "tls", True),
+    ("SSL handshake failed", "tls", True),
+    ("[AUTHENTICATIONFAILED] Authentication failed.", "auth", True),
+    ("Connection timed out", "timeout", False),
+    ("something went wrong", "unknown", False),
+    ("temporary failure in name resolution", "unknown", False),
+])
+def test_failure_taxonomy(error, category, is_fatal):
+    """_classify_error maps errors to categories; fatal categories refuse fast-fail."""
+    assert _classify_error(error) == category
+    if error is None:
+        return
+    in_fatal = _classify_error(error) in _FATAL_CATEGORIES
+    assert in_fatal is is_fatal
 
-    @pytest.mark.parametrize("error", [
-        "Could not find DNS resolutions for imap.chat.beeep.ir:993",
-        "Name or service not known",
-        "Connection refused",
-        "ConnectionRefusedError: [Errno 111]",
-        "certificate has expired",
-        "SSL handshake failed",
-        "[AUTHENTICATIONFAILED] Authentication failed.",
-    ])
-    def test_fatal_errors(self, error):
-        assert _classify_error(error) in _FATAL_CATEGORIES
 
-    @pytest.mark.parametrize("error", [
-        "Connection timed out",
-        "something went wrong",
-        "temporary failure in name resolution",
-    ])
-    def test_non_fatal_errors(self, error):
-        assert _classify_error(error) not in _FATAL_CATEGORIES
+@pytest.mark.parametrize(("error", "is_crash"), [
+    ("Failed to setup sender profile on host.abc: JsonRpcError: "
+     "{'code': -1, 'message': 'Could not find DNS resolutions'}", False),
+    ("AUTHENTICATIONFAILED: login failed", False),
+    ("Connection timeout: deadline has elapsed", False),
+    ("Failed to setup sender profile on relay.example: SomeError: details", False),
+    ("RPC server closed", True),
+    ("rpc process crashed", True),
+    ("BrokenPipeError writing to rpc stdin", True),
+    ("ConnectionResetError: [Errno 104] Connection reset by peer", True),
+    ("EOFError reading from rpc server", True),
+])
+def test_rpc_crash_classification(error, is_crash):
+    """App-level errors must not match RPC crash keywords; transport errors must."""
+    from chatmail_prober.orchestration import _RPC_CRASH_KEYWORDS
+    matched = any(kw in error.lower() for kw in _RPC_CRASH_KEYWORDS)
+    assert matched is is_crash
 
 
 # -- Tests merged from test_ip_relay.py --

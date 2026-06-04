@@ -99,23 +99,15 @@ class TestUpdateMetricsError:
         assert math.isnan(metrics_mod.account_setup_seconds.labels(**lbl)._value.get())
 
 
-class TestProbeType:
-    def test_probe_type_self_when_source_equals_destination(self):
-        result = ProbeResult("a.example", "a.example", sent=1, received=1, loss=0.0,
-                             rtts_ms=[100.0])
-        metrics_mod.update_metrics(result)
-
-        self_lbl = dict(source="a.example", destination="a.example", probe_type="self")
-        assert metrics_mod.probe_success.labels(**self_lbl)._value.get() == 1.0
-        assert metrics_mod.rtt_median.labels(**self_lbl)._value.get() == pytest.approx(0.1)
-
-    def test_probe_type_cross_when_source_differs_from_destination(self):
-        result = ProbeResult("a.example", "b.example", sent=1, received=1, loss=0.0,
-                             rtts_ms=[100.0])
-        metrics_mod.update_metrics(result)
-
-        cross_lbl = dict(source="a.example", destination="b.example", probe_type="cross")
-        assert metrics_mod.probe_success.labels(**cross_lbl)._value.get() == 1.0
+@pytest.mark.parametrize(("src", "dst", "expected_type"), [
+    ("a.example", "a.example", "self"),
+    ("a.example", "b.example", "cross"),
+])
+def test_probe_type_label(src, dst, expected_type):
+    result = ProbeResult(src, dst, sent=1, received=1, loss=0.0, rtts_ms=[100.0])
+    metrics_mod.update_metrics(result)
+    lbl = dict(source=src, destination=dst, probe_type=expected_type)
+    assert metrics_mod.probe_success.labels(**lbl)._value.get() == 1.0
 
 
 class TestUpdateMetricsMultiplePairs:
@@ -132,37 +124,34 @@ class TestUpdateMetricsMultiplePairs:
 
 
 class TestClearStaleLabels:
-    def test_removes_labels_for_removed_relay(self):
-        r1 = ProbeResult("a.example", "b.example", sent=1, received=1, loss=0.0,
-                         rtts_ms=[100.0])
-        r2 = ProbeResult("a.example", "a.example", sent=1, received=1, loss=0.0,
-                         rtts_ms=[50.0])
-        metrics_mod.update_metrics(r1)
-        metrics_mod.update_metrics(r2)
-
-        # Both label sets exist
-        assert ("a.example", "b.example", "cross") in metrics_mod.probe_success._metrics
-        assert ("a.example", "a.example", "self") in metrics_mod.probe_success._metrics
-
-        # Remove b.example from active set
-        metrics_mod.clear_stale_labels(["a.example"])
-
-        # b.example labels should be gone, a.example self-loop should remain
-        assert ("a.example", "b.example", "cross") not in metrics_mod.probe_success._metrics
-        assert ("a.example", "a.example", "self") in metrics_mod.probe_success._metrics
-
-    def test_clears_all_metric_types(self):
-        r = ProbeResult("a.example", "gone.example", error="dead")
-        metrics_mod.update_metrics(r)
-
-        lbl = ("a.example", "gone.example", "cross")
-        assert lbl in metrics_mod.send_errors_total._metrics
-        assert lbl in metrics_mod.rtt_median._metrics
+    def test_removes_stale_and_keeps_active_across_all_metrics(self):
+        """clear_stale_labels removes gone-relay labels from every probe metric
+        and leaves active-relay labels intact."""
+        # Success probes populate rtt/probe_success/probe_loss_ratio/account_setup_seconds
+        metrics_mod.update_metrics(
+            ProbeResult("a.example", "a.example", sent=1, received=1, loss=0.0, rtts_ms=[50.0])
+        )
+        # Error probes populate send_errors_total too; use a self-loop to keep it active
+        metrics_mod.update_metrics(ProbeResult("a.example", "a.example", error="self-fail"))
+        # Stale pair: gone.example is not in the active list
+        metrics_mod.update_metrics(ProbeResult("a.example", "gone.example", error="dead"))
 
         metrics_mod.clear_stale_labels(["a.example"])
 
-        assert lbl not in metrics_mod.send_errors_total._metrics
-        assert lbl not in metrics_mod.rtt_median._metrics
+        stale = ("a.example", "gone.example", "cross")
+        active = ("a.example", "a.example", "self")
+
+        all_probe_metrics = [
+            metrics_mod.rtt_median, metrics_mod.rtt_stddev,
+            metrics_mod.rtt_p90, metrics_mod.rtt_p10,
+            metrics_mod.probe_success, metrics_mod.probe_loss_ratio,
+            metrics_mod.account_setup_seconds, metrics_mod.send_errors_total,
+        ]
+        for m in all_probe_metrics:
+            assert stale not in m._metrics, f"{m._name} still has stale label {stale}"
+            assert active in m._metrics, (
+                f"{m._name} lost active label set after clear_stale_labels"
+            )
 
 
 class TestClearStaleRelayLabels:

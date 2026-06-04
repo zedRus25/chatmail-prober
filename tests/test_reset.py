@@ -71,15 +71,11 @@ class TestResetArgParsing:
 #
 
 class TestResetAccountsFunction:
-    def test_full_reset_removes_all_worker_dirs(self, tmp_path):
+    def test_full_reset_removes_worker_dirs_preserves_alive_check(self, tmp_path):
         cache = _make_cache(tmp_path)
         reset_accounts(cache, domains=["all"])
         assert not (cache / "worker-0").exists()
         assert not (cache / "worker-1").exists()
-
-    def test_full_reset_preserves_alive_check(self, tmp_path):
-        cache = _make_cache(tmp_path)
-        reset_accounts(cache, domains=["all"])
         assert (cache / "alive-check").exists()
 
     def test_selective_reset_raises_systemexit(self, tmp_path):

@@ -217,41 +217,23 @@ def _resolved(kind="self"):
     return ("h", 3478, "u", "p", kind)
 
 
-def test_check_turn_ok(monkeypatch):
-    monkeypatch.setattr(
-        turn, "run_uclient",
-        lambda *a, **k: turn_parse.TurnRun(ok=True, returncode=0),
-    )
-    r = check_turn(_resolved("self"))
-    assert r.status_code == turn.TurnStatus.OK
-    assert r.endpoint_kind == "self"
+def test_check_turn_endpoint_kind(monkeypatch):
+    """check_turn propagates endpoint_kind from the resolved tuple."""
+    monkeypatch.setattr(turn, "run_uclient",
+                        lambda *a, **k: turn_parse.TurnRun(ok=True, returncode=0))
+    assert check_turn(_resolved("self")).endpoint_kind == "self"
 
 
-def test_check_turn_down(monkeypatch):
-    monkeypatch.setattr(
-        turn, "run_uclient",
-        lambda *a, **k: turn_parse.TurnRun(ok=False, returncode=1),
-    )
-    r = check_turn(_resolved("self"))
-    assert r.status_code == turn.TurnStatus.DOWN
-
-
-def test_check_turn_binary_missing(monkeypatch):
-    monkeypatch.setattr(
-        turn, "run_uclient",
-        lambda *a, **k: turn_parse.TurnRun(ok=False, returncode=-1, error="binary-missing"),
-    )
-    r = check_turn(_resolved("fallback"))
-    assert r.status_code == turn.TurnStatus.BINARY_MISSING
-
-
-def test_check_turn_timeout(monkeypatch):
-    monkeypatch.setattr(
-        turn, "run_uclient",
-        lambda *a, **k: turn_parse.TurnRun(ok=False, returncode=-1, error="timeout"),
-    )
-    r = check_turn(_resolved("fallback"))
-    assert r.status_code == turn.TurnStatus.TIMEOUT
+@pytest.mark.parametrize(("run_kwargs", "expected"), [
+    ({"ok": True,  "returncode": 0},                             turn.TurnStatus.OK),
+    ({"ok": False, "returncode": 1},                             turn.TurnStatus.DOWN),
+    ({"ok": False, "returncode": -1, "error": "binary-missing"}, turn.TurnStatus.BINARY_MISSING),
+    ({"ok": False, "returncode": -1, "error": "timeout"},        turn.TurnStatus.TIMEOUT),
+])
+def test_check_turn_status(monkeypatch, run_kwargs, expected):
+    monkeypatch.setattr(turn, "run_uclient",
+                        lambda *a, **k: turn_parse.TurnRun(**run_kwargs))
+    assert check_turn(_resolved()).status_code == expected
 
 
 def test_fallback_constant_matches_core():

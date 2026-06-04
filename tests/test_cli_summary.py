@@ -158,20 +158,11 @@ class TestDeadRelayTable:
     """When dead_relays is a dict[str, str|None], a Host/Error/Message table
     is rendered below the probe table."""
 
-    def test_dead_relay_table_header(self):
+    def test_dead_relay_table(self):
         dead = {"owo.void.my": "AUTHENTICATIONFAILED: login failed"}
         out = _render([_ok()], ["a.example"], dead, elapsed_s=5.0)
-        assert "Host" in out
-        assert "Error" in out
-
-    def test_dead_relay_host_shown(self):
-        dead = {"owo.void.my": "AUTHENTICATIONFAILED: login failed"}
-        out = _render([_ok()], ["a.example"], dead, elapsed_s=5.0)
+        assert "Host" in out and "Error" in out
         assert "owo.void.my" in out
-
-    def test_dead_relay_error_shown(self):
-        dead = {"owo.void.my": "AUTHENTICATIONFAILED: login failed"}
-        out = _render([_ok()], ["a.example"], dead, elapsed_s=5.0)
         assert "AUTHENTICATIONFAILED" in out
 
     def test_no_dead_table_when_all_alive(self):

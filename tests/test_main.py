@@ -597,65 +597,48 @@ def clear_metrics():
     yield
 
 
+_ALIVE_CHECK_CASES = [
+    (
+        "host.abc",
+        "Failed to setup sender profile on host.abc: JsonRpcError: "
+        "{'code': -1, 'message': 'Error: IMAP failed to connect to "
+        "imap.host.abc:993:tls: Could not find DNS resolutions for "
+        "imap.host.abc:993. Check server hostname and your network'}",
+        -6.0,
+    ),
+    (
+        "hostb.xyz",
+        "Failed to setup sender profile on hostb.xyz: JsonRpcError: "
+        "{'code': -1, 'message': 'Error: Cannot login as "
+        '"user@hostb.xyz". [AUTHENTICATIONFAILED] Authentication failed.\'}',
+        -3.0,
+    ),
+    (
+        "hostd.xyz",
+        "Failed to setup sender profile on hostd.xyz: JsonRpcError: "
+        "{'code': -1, 'message': 'Error: IMAP failed to connect to "
+        "hostd.xyz:993:tls: Connection timeout: deadline has elapsed'}",
+        -1.0,
+    ),
+]
+
+
 class TestAliveCheckMetrics:
-    def test_dns_failure_sets_status_minus_six(self, tmp_path, monkeypatch, clear_metrics):
-        dns_error = (
-            "Failed to setup sender profile on host.abc: JsonRpcError: "
-            "{'code': -1, 'message': 'Error: IMAP failed to connect to "
-            "imap.host.abc:993:tls: Could not find DNS resolutions for "
-            "imap.host.abc:993. Check server hostname and your network'}"
-        )
-
+    @pytest.mark.parametrize(("relay", "error_fragment", "status"), _ALIVE_CHECK_CASES)
+    def test_failure_sets_relay_status(self, relay, error_fragment, status,
+                                      tmp_path, monkeypatch, clear_metrics):
         def _probe(src, dst, count=1, interval=0.1, accounts_dir="",
                    timeout=10, relay_contexts=None):
-            if src == "host.abc":
-                return _err(src, dst, dns_error)
+            if src == relay:
+                return _err(src, dst, error_fragment)
             return _ok(src, dst)
 
         monkeypatch.setattr("chatmail_prober.orchestration.run_probe", _probe)
         args = _orch_args(tmp_path, workers=2)
-        alive, dead = check_relays_alive(["host.abc", "host.good"], args, Path(args.cache_dir))
+        alive, _ = check_relays_alive([relay, "host.good"], args, Path(args.cache_dir))
 
-        assert "host.abc" not in alive
-        assert metrics_mod.relay_status.labels(relay="host.abc")._value.get() == -6.0
-
-    def test_auth_failure_sets_status_minus_three(self, tmp_path, monkeypatch, clear_metrics):
-        auth_error = (
-            "Failed to setup sender profile on hostb.xyz: JsonRpcError: "
-            "{'code': -1, 'message': 'Error: Cannot login as "
-            '"user@hostb.xyz". [AUTHENTICATIONFAILED] Authentication failed.\'}'
-        )
-
-        def _probe(src, dst, count=1, interval=0.1, accounts_dir="",
-                   timeout=10, relay_contexts=None):
-            if src == "hostb.xyz":
-                return _err(src, dst, auth_error)
-            return _ok(src, dst)
-
-        monkeypatch.setattr("chatmail_prober.orchestration.run_probe", _probe)
-        args = _orch_args(tmp_path, workers=2)
-        check_relays_alive(["hostb.xyz", "host.good"], args, Path(args.cache_dir))
-
-        assert metrics_mod.relay_status.labels(relay="hostb.xyz")._value.get() == -3.0
-
-    def test_timeout_sets_status_minus_one(self, tmp_path, monkeypatch, clear_metrics):
-        timeout_error = (
-            "Failed to setup sender profile on hostd.xyz: JsonRpcError: "
-            "{'code': -1, 'message': 'Error: IMAP failed to connect to "
-            "hostd.xyz:993:tls: Connection timeout: deadline has elapsed'}"
-        )
-
-        def _probe(src, dst, count=1, interval=0.1, accounts_dir="",
-                   timeout=10, relay_contexts=None):
-            if src == "hostd.xyz":
-                return _err(src, dst, timeout_error)
-            return _ok(src, dst)
-
-        monkeypatch.setattr("chatmail_prober.orchestration.run_probe", _probe)
-        args = _orch_args(tmp_path, workers=2)
-        check_relays_alive(["hostd.xyz", "host.good"], args, Path(args.cache_dir))
-
-        assert metrics_mod.relay_status.labels(relay="hostd.xyz")._value.get() == -1.0
+        assert relay not in alive
+        assert metrics_mod.relay_status.labels(relay=relay)._value.get() == status
 
     def test_online_relay_sets_status_one(self, tmp_path, monkeypatch, clear_metrics):
         monkeypatch.setattr("chatmail_prober.orchestration.run_probe",

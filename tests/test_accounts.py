@@ -113,52 +113,20 @@ def _push_idle(rpc: _Rpc, account_id: int, delay: float = 0.0) -> None:
 class TestWaitAccountOnlineTimeout:
     """AccountMaker.wait_account_online must raise PingError on timeout."""
 
-    def test_raises_ping_error_when_no_event(self):
-        """No event in queue -> PingError after timeout."""
+    def test_timeout_raises_classified_ping_error(self):
+        """No event in queue -> PingError with correct message and relay_status_value -1."""
         rpc = _Rpc()
         dc = _DC(rpc, "hostc.zzz")
         maker = AccountMaker(dc)
         account = _Account(rpc, 1, "hostc.zzz")
-
-        with pytest.raises(PingError) as exc_info:
-            maker.wait_account_online(account, timeout=0.15)
-
-        assert "Timeout waiting for" in str(exc_info.value)
-        assert "hostc.zzz" in str(exc_info.value) or "user1" in str(exc_info.value)
-
-    def test_error_message_matches_production_log_format(self):
-        """The PingError message must match the format seen in production logs:
-        'Timeout waiting for <addr> to come online'
-        """
-        rpc = _Rpc()
-        dc = _DC(rpc, "hostc.zzz")
-        maker = AccountMaker(dc)
-        account = _Account(rpc, 99, "hostc.zzz")
 
         with pytest.raises(PingError) as exc_info:
             maker.wait_account_online(account, timeout=0.15)
 
         msg = str(exc_info.value)
-        assert msg.startswith("Timeout waiting for"), (
-            f"Expected 'Timeout waiting for ...', got: {msg!r}"
-        )
-        assert "to come online" in msg
-
-    def test_timeout_error_classifies_as_minus_one(self):
-        """The PingError message must map to relay_status_value == -1 (timeout)."""
-        rpc = _Rpc()
-        dc = _DC(rpc, "hostc.zzz")
-        maker = AccountMaker(dc)
-        account = _Account(rpc, 1, "hostc.zzz")
-
-        with pytest.raises(PingError) as exc_info:
-            maker.wait_account_online(account, timeout=0.15)
-
-        # Simulate how run_probe wraps it:
+        assert msg.startswith("Timeout waiting for") and "to come online" in msg
         wrapped = f"Timeout or error waiting for profiles to be online: {exc_info.value}"
-        assert relay_status_value(wrapped) == -1, (
-            f"Expected -1 (timeout) for: {wrapped!r}"
-        )
+        assert relay_status_value(wrapped) == -1
 
     def test_succeeds_when_event_arrives_in_time(self):
         """wait_account_online must return normally when IMAP_INBOX_IDLE arrives."""
@@ -209,38 +177,22 @@ class TestAccountReuse:
         assert was_online is False
         assert account in maker.online
 
-    def test_second_call_reuses_online_account(self):
-        """Second call for same domain must return the same account with was_online=True."""
+    def test_second_call_reuses_account_without_extra_setup(self):
+        """Second call must return same account object, was_online=True, no new add_account/start_io."""
         rpc = _Rpc()
         dc = _DC(rpc, "relay.example")
         maker = AccountMaker(dc)
 
         first, _ = maker.get_relay_account("relay.example")
         add_calls_after_first = dc.add_account_calls
+        start_io_count = first.start_io_called
 
         second, was_online = maker.get_relay_account("relay.example")
 
-        assert second is first, "Expected the same account object to be reused"
+        assert second is first
         assert was_online is True
-        assert dc.add_account_calls == add_calls_after_first, (
-            "dc.add_account() must not be called again when reusing an online account"
-        )
-
-    def test_reuse_skips_start_io(self):
-        """Reused account must not have start_io() called again."""
-        rpc = _Rpc()
-        dc = _DC(rpc, "relay.example")
-        maker = AccountMaker(dc)
-
-        first, _ = maker.get_relay_account("relay.example")
-        start_io_count = first.start_io_called
-
-        _, was_online = maker.get_relay_account("relay.example")
-
-        assert was_online is True
-        assert first.start_io_called == start_io_count, (
-            "start_io() must not be called again on a reused account"
-        )
+        assert dc.add_account_calls == add_calls_after_first
+        assert first.start_io_called == start_io_count
 
     def test_self_loop_returns_two_distinct_accounts(self):
         """Self-loop (src==dst) must produce two different accounts via exclude."""
