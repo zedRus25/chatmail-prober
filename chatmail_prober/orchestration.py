@@ -139,7 +139,7 @@ def _check_one_turn(
 ) -> None:
     """Resolve TURN coords for `relay` and run turnutils_uclient.
 
-    When pre_resolved is provided (explicit --extra-turn entry), the
+    When pre_resolved is provided (CHATMAIL_EXTRA_TURN entry), the
     account/ice_servers lookup is skipped entirely.  Writes metrics directly.
     """
     if pre_resolved is None:
@@ -220,7 +220,7 @@ def _run_turn_checks(
     alive_pool: RelayPool, alive_relays: list[str],
     args: argparse.Namespace,
 ) -> None:
-    """Fan out TURN health checks across alive relays and any --extra-turn hosts."""
+    """Fan out TURN health checks across alive relays and any CHATMAIL_EXTRA_TURN hosts."""
     extra: dict[str, TurnResolved] = getattr(args, "extra_turn_map", {})
     if not getattr(args, "check_turn", False) and not extra:
         return

@@ -60,6 +60,7 @@ RELAYS               Relay list file(s), one domain per line, # comments (option
 -t, --timeout SECS   Per-pair receive timeout in seconds (default: 90)
 -w, --workers N      Max concurrent probe threads (default: 5)
 -T, --check-turn     Also probe each relay's TURN endpoint (requires coturn-utils)
+                     Explicit TURN servers can also be added via CHATMAIL_EXTRA_TURN (see below)
 -I, --check-iroh     Also probe each relay's iroh-relay URL (IMAP METADATA + HTTP GET)
 --cache-dir PATH     Base dir for per-worker account directories (default: ~/.cache/chatmail-prober)
 --reset [DOMAIN...]  Reset cached accounts; "all" resets all, DOMAIN args reset only those
@@ -136,6 +137,18 @@ own TURN are labelled `turn_endpoint="self"`; relays that fall back
 to the public `turn.delta.chat` are labelled `turn_endpoint="fallback"`.
 Status codes: `1` ok, `0` down, `-2` parse-error (`ice_servers()`
 empty/malformed), `-4` binary-missing, `-5` timeout.
+
+`CHATMAIL_EXTRA_TURN` (environment variable) adds explicit TURN servers
+to probe without requiring them to be in the relay list. Set it to a
+space-separated list of `HOST:PORT:USER:CRED` specs; each host is probed
+unconditionally (independent of `-T/--check-turn`). Useful for probing
+dedicated TURN servers (e.g. `turn.delta.chat`) that are not themselves
+chatmail relays. Example:
+
+```bash
+export CHATMAIL_EXTRA_TURN="turn.delta.chat:3478:user:secret"
+chatmail-prober relays.txt
+```
 
 `-I/--check-iroh` resolves each relay's iroh-relay URL via IMAP
 METADATA (`/shared/vendor/deltachat/irohrelay`, RFC 5464) and HTTP
