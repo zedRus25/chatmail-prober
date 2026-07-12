@@ -1,6 +1,7 @@
 # chatmail-prober
 
 [![CI](https://github.com/zedRus25/chatmail-prober/actions/workflows/ci.yml/badge.svg)](https://github.com/zedRus25/chatmail-prober/actions/workflows/ci.yml)
+[![Live relay probes](https://github.com/zedRus25/chatmail-prober/actions/workflows/live.yml/badge.svg)](https://github.com/zedRus25/chatmail-prober/actions/workflows/live.yml)
 [![License: MPL 2.0](https://img.shields.io/badge/license-MPL--2.0-brightgreen.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Delta Chat core 2.53+](https://img.shields.io/badge/deltachat--core-2.53%2B-6c4bd8.svg)](https://github.com/deltachat/deltachat-core-rust)
@@ -321,6 +322,12 @@ CMPING_LIVE_TEST=custom.relay uv run pytest tests/test_live.py -v  # override re
 make install-dev
 make test
 ```
+
+CI runs lint, typecheck, and the unit tests (`.github/workflows/ci.yml`) on
+every push and PR. The **Live relay probes** badge tracks a separate weekly job
+(`.github/workflows/live.yml`, also runnable on demand) that probes real
+relays; a red status there means a relay was unreachable during the last run,
+not that the build is broken.
 
 ## cmping-src submodule
 
