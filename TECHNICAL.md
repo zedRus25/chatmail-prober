@@ -523,9 +523,11 @@ applies retry logic:
 - Transient errors on previously-dead relays -> skip retry (initial probe detects recovery)
 - All relays get a fresh probe each round so recovery is detected within one cycle
 
-The transient/persistent classification uses `is_transient_alive_error()`
-which calls `verify_relay_status()` to distinguish false DNS errors
-(reclassified as timeout, retryable) from genuine ones.  Previously-dead
+The transient/persistent classification is computed by `verify_relay_status()`
+(the same helper `is_transient_alive_error()` wraps), cached per relay inside
+`check_relays_alive()` so a relay's DNS cross-check runs at most once per
+alive check.  It distinguishes false DNS errors (reclassified as timeout,
+retryable) from genuine ones.  Previously-dead
 relays still get the initial probe each round (so recovery is detected
 within one cycle) but skip the retry phase since retrying within the same
 window won't help a persistent outage.

@@ -1,7 +1,7 @@
 """Tests for Prometheus metric updates from ProbeResults."""
 
 import socket
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -270,6 +270,57 @@ class TestVerifyRelayStatus:
         assert metrics_mod.verify_relay_status(
             "chat.example", "Could not find DNS resolutions"
         ) == -1
+
+    @patch("chatmail_prober.metrics.socket.getaddrinfo")
+    def test_ipv4_literal_dns_error_is_spurious(self, mock_gai):
+        """An IP literal can't have a DNS failure; classify as timeout, no
+        autoconfig-subdomain cross-check (imap.<ip> is meaningless)."""
+        mock_gai.return_value = [(2, 1, 6, "", ("1.2.3.4", 993))]
+        assert metrics_mod.verify_relay_status(
+            "1.2.3.4", "Name or service not known"
+        ) == -1
+        mock_gai.assert_called_once_with("1.2.3.4", 993)  # base only, no subdomains
+
+    @patch("chatmail_prober.metrics.socket.getaddrinfo")
+    def test_bracketed_ipv6_literal_is_unbracketed(self, mock_gai):
+        mock_gai.return_value = [(10, 1, 6, "", ("::1", 993, 0, 0))]
+        assert metrics_mod.verify_relay_status(
+            "[::1]", "Name or service not known"
+        ) == -1
+        mock_gai.assert_called_once_with("::1", 993)  # brackets stripped for resolution
+
+
+class TestSampleRelayConnections:
+    @patch("chatmail_prober.metrics.subprocess.run")
+    @patch("chatmail_prober.metrics.socket.getaddrinfo")
+    def test_sums_across_multiple_ips(self, mock_gai, mock_run):
+        """A relay behind several A records is summed across all of them."""
+        mock_gai.return_value = [
+            (2, 1, 6, "", ("1.2.3.4", 993)),
+            (2, 1, 6, "", ("5.6.7.8", 993)),
+        ]
+
+        def _ss(argv, **kwargs):
+            r = MagicMock()
+            header = "State Recv-Q Send-Q Local Peer\n"
+            row = "ESTAB 0 0 x:1 y:2\n"
+            # 1.2.3.4 -> 2 connections, 5.6.7.8 -> 1 connection
+            r.stdout = header + (row * 2 if "1.2.3.4" in argv[2] else row)
+            return r
+
+        mock_run.side_effect = _ss
+        metrics_mod.sample_relay_connections(["relay.example"])
+        assert metrics_mod.relay_connections.labels(
+            relay="relay.example"
+        )._value.get() == 3
+
+    @patch("chatmail_prober.metrics.socket.getaddrinfo",
+           side_effect=socket.gaierror("no such host"))
+    def test_resolution_failure_sets_zero(self, mock_gai):
+        metrics_mod.sample_relay_connections(["relay.example"])
+        assert metrics_mod.relay_connections.labels(
+            relay="relay.example"
+        )._value.get() == 0
 
 
 class TestIsTransientAliveError:

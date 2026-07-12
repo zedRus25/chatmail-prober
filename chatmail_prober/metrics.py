@@ -23,6 +23,7 @@ from prometheus_client import (
     disable_created_metrics,
 )
 
+from .accounts import is_ip_address
 from .probe import _classify_error
 
 # Suppress the _created timestamp lines added by prometheus_client for each
@@ -258,11 +259,17 @@ def verify_relay_status(relay: str | None, error_str: str | None) -> int:
     value = relay_status_value(error_str)
     if value != -6 or relay is None:
         return value
+    # Strip IPv6 brackets ("[::1]" -> "::1") so getaddrinfo accepts the literal.
+    host = relay[1:-1] if relay.startswith("[") and relay.endswith("]") else relay
     # RPC says DNS failure -- verify by resolving the base domain.
     try:
-        socket.getaddrinfo(relay, 993)
+        socket.getaddrinfo(host, 993)
     except socket.gaierror:
         return -6  # genuine DNS failure: base domain does not resolve
+    # An IP literal can't have a DNS failure and has no autoconfig subdomains
+    # to cross-check; the RPC DNS error was spurious (e.g. a filtered port).
+    if is_ip_address(host):
+        return -1
     # Base domain resolves -- check autoconfig subdomains for diagnostics.
     missing = []
     for sub in (f"imap.{relay}", f"smtp.{relay}"):
@@ -286,6 +293,13 @@ def verify_relay_status(relay: str | None, error_str: str | None) -> int:
     return -1
 
 
+# Alive-check status values that might resolve on retry: -1 (timeout) and
+# 0 (unknown).  Persistent errors (genuine DNS, auth, TLS, connection refused)
+# won't change by waiting.  Single source of truth shared with
+# orchestration.check_relays_alive so the two retry gates can't diverge.
+_TRANSIENT_ALIVE_STATUSES = frozenset({-1, 0})
+
+
 def is_transient_alive_error(relay: str | None, error_str: str | None) -> bool:
     """Check if an alive-check error is transient and worth retrying.
 
@@ -293,9 +307,7 @@ def is_transient_alive_error(relay: str | None, error_str: str | None) -> bool:
     reclassified DNS).  Returns False for persistent errors (genuine DNS,
     auth, TLS, connection refused) that won't change with a retry.
     """
-    status = verify_relay_status(relay, error_str)
-    # -1 (timeout) and 0 (unknown) are potentially transient
-    return status in (-1, 0)
+    return verify_relay_status(relay, error_str) in _TRANSIENT_ALIVE_STATUSES
 
 
 
@@ -347,18 +359,26 @@ def update_iroh_metrics(relay: str, result: "IrohResult") -> None:
 
 
 def sample_relay_connections(relays: list[str]) -> None:
-    """Sample network connection counts to each relay and update metrics.
+    """Sample established TCP connection counts to each relay.
+
+    Counts connections from the whole host (not just this process) to *any*
+    of the relay's resolved IPs, so treat it as a coarse gauge.  A relay
+    behind several A/AAAA records is summed across all of them rather than
+    counting only the first.
     """
     for relay in relays:
         try:
-            ip = socket.getaddrinfo(relay, 993)[0][4][0]
-            result = subprocess.run(
-                ["ss", "-tn", f"dst {ip}"],
-                capture_output=True, text=True, timeout=5,
-                check=False,
-            )
-            conn_count = sum(1 for l in result.stdout.splitlines() if l.strip())
-            conn_count = max(0, conn_count - 1)  # subtract header
+            infos = socket.getaddrinfo(relay, 993, proto=socket.IPPROTO_TCP)
+            ips = {info[4][0] for info in infos}
+            conn_count = 0
+            for ip in ips:
+                result = subprocess.run(
+                    ["ss", "-tn", f"dst {ip}"],
+                    capture_output=True, text=True, timeout=5,
+                    check=False,
+                )
+                rows = sum(1 for l in result.stdout.splitlines() if l.strip())
+                conn_count += max(0, rows - 1)  # subtract per-invocation header
             relay_connections.labels(relay=relay).set(conn_count)
         except Exception as e:
             log.debug("sample_connections failed for %s: %s", relay, type(e).__name__)
@@ -370,7 +390,9 @@ def _set_rtt_metrics(labels: dict[str, str], rtt_s: list[float]) -> None:
     if len(rtt_s) >= 2:
         # quantiles(n=10, method="inclusive") returns 9 cut points;
         # index 0 = p10, index 8 = p90.  "inclusive" interpolates within
-        # the data range (exclusive can extrapolate beyond min/max).
+        # the data range (exclusive can extrapolate beyond min/max).  This is
+        # the same "inclusive" method ProbeResult._stats uses (n=100), so the
+        # p90 here and the CLI table's p90 agree on identical samples.
         deciles = statistics.quantiles(rtt_s, n=10, method="inclusive")
         p10, p90, stddev = deciles[0], deciles[-1], statistics.stdev(rtt_s)
     else:

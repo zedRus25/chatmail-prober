@@ -25,6 +25,7 @@ import structlog
 from .log_config import get_logger
 from .iroh import IrohResult, IrohStatus, check_relay_iroh
 from .metrics import (
+    _TRANSIENT_ALIVE_STATUSES,
     clear_stale_labels,
     clear_stale_relay_labels,
     last_round_timestamp,
@@ -380,7 +381,7 @@ def check_relays_alive(
         return _status_cache[key]
 
     def _is_transient(relay: str, error_str: str | None) -> bool:
-        return _cached_status(relay, error_str) in (-1, 0)
+        return _cached_status(relay, error_str) in _TRANSIENT_ALIVE_STATUSES
 
     retryable = {r: err for r, err in dead.items()
                  if r not in previously_dead

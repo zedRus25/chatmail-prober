@@ -11,6 +11,7 @@ import pytest
 
 from chatmail_prober import metrics as metrics_mod
 from chatmail_prober.__main__ import (
+    _refresh_relay_list,
     main,
     parse_args,
 )
@@ -525,6 +526,55 @@ class TestPrintMetrics:
     def test_writes_to_stdout(self, capsys):
         print_metrics()
         assert len(capsys.readouterr().out) > 0
+
+
+class TestHostsAutoFetchMutualExclusion:
+    def test_hosts_and_auto_fetch_rejected(self, tmp_path):
+        """--hosts overrides relay files, so combining it with --auto-fetch
+        (which merges a fetched file) is contradictory and must error early."""
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args(["-H", "a.example", "--auto-fetch", str(tmp_path / "f.txt")])
+        assert exc_info.value.code != 0
+
+    def test_hosts_alone_ok(self):
+        parse_args(["-H", "a.example"])  # must not raise
+
+    def test_auto_fetch_alone_ok(self, tmp_path):
+        parse_args(["r.txt", "--auto-fetch", str(tmp_path / "f.txt")])  # must not raise
+
+
+class TestRefreshRelayList:
+    """_refresh_relay_list must never let an upstream hiccup crash the loop."""
+
+    def test_returns_refreshed_on_success(self):
+        with patch("chatmail_prober.__main__.fetch_relay_list"), \
+             patch("chatmail_prober.__main__.read_relay_list",
+                   return_value=["a.example", "b.example"]):
+            result = _refresh_relay_list("http://x", "/tmp/f", ["/tmp/f"], ["a.example"])
+        assert result == ["a.example", "b.example"]
+
+    def test_keeps_current_on_systemexit(self):
+        """fetch/read raise SystemExit when they parse nothing; the loop must
+        keep the last-good list instead of terminating the service."""
+        current = ["a.example", "b.example"]
+        with patch("chatmail_prober.__main__.fetch_relay_list",
+                   side_effect=SystemExit("No relay domains found")):
+            result = _refresh_relay_list("http://x", "/tmp/f", ["/tmp/f"], current)
+        assert result == current
+
+    def test_keeps_current_on_network_error(self):
+        current = ["a.example"]
+        with patch("chatmail_prober.__main__.fetch_relay_list",
+                   side_effect=OSError("connection reset")):
+            result = _refresh_relay_list("http://x", "/tmp/f", ["/tmp/f"], current)
+        assert result == current
+
+    def test_keyboard_interrupt_still_propagates(self):
+        """KeyboardInterrupt must not be swallowed by the refresh guard."""
+        with patch("chatmail_prober.__main__.fetch_relay_list",
+                   side_effect=KeyboardInterrupt):
+            with pytest.raises(KeyboardInterrupt):
+                _refresh_relay_list("http://x", "/tmp/f", ["/tmp/f"], ["a.example"])
 
 
 class TestOptionalRelayFile:

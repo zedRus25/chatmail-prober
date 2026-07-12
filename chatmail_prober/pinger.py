@@ -128,6 +128,9 @@ class Pinger:
                     break
                 if deadline is not None and time.monotonic() >= deadline:
                     break
+                # seq is right-padded to a fixed width so every ping body is
+                # the same length; _parse_pong re-splits on whitespace so the
+                # padding is cosmetic (keeps message sizes uniform on the wire).
                 text = f"{self.tx} {time.time():.4f} {seq:17}"
                 self.chat.send_text(text)
                 self.sent += 1

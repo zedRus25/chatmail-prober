@@ -49,7 +49,12 @@ class _SupprRpcClosedFilter(logging.Filter):
 
 
 def _parse_extra_turns(specs: list[str]) -> dict[str, TurnResolved]:
-    """Parse HOST:PORT:USER:CRED specs into a host -> TurnResolved map."""
+    """Parse HOST:PORT:USER:CRED specs into a host -> TurnResolved map.
+
+    HOST is a bare hostname or IPv4 literal.  A bare IPv6 literal cannot be
+    used here -- its colons are indistinguishable from the field separators;
+    probe such endpoints by hostname instead.
+    """
     result: dict[str, TurnResolved] = {}
     for spec in specs:
         try:
@@ -120,6 +125,36 @@ def fetch_relay_list(url: str, dest: str) -> None:
         raise SystemExit(f"No relay domains found at {url}")
     Path(dest).write_text("\n".join(domains) + "\n")
     log.info("Fetched %d relays from %s -> %s", len(domains), url, dest)
+
+
+def _refresh_relay_list(
+    url: str, dest: str, relay_files: list[str], current: list[str]
+) -> list[str]:
+    """Re-fetch the relay list, returning the new list or *current* on failure.
+
+    Runs inside the long-lived probe loop, so every failure must be
+    swallowed -- including the ``SystemExit`` that ``fetch_relay_list`` and
+    ``read_relay_list`` raise when they parse nothing (an upstream markup
+    change, a maintenance page, an empty response).  A bad refresh keeps the
+    last-good list rather than crashing a service meant to run for months.
+    Logs added/removed relays only when the list actually changes.
+    """
+    try:
+        fetch_relay_list(url, dest)
+        refreshed = read_relay_list(relay_files)
+    except (Exception, SystemExit) as e:
+        # SystemExit is a BaseException, so it must be named explicitly here;
+        # KeyboardInterrupt is deliberately left to propagate.
+        log.warning("Failed to refresh relay list, keeping current: %s", e)
+        return current
+    if refreshed != current:
+        added = set(refreshed) - set(current)
+        removed = set(current) - set(refreshed)
+        if added:
+            log.warning("Relay list: %d new: %s", len(added), ", ".join(added))
+        if removed:
+            log.warning("Relay list: %d removed: %s", len(removed), ", ".join(removed))
+    return refreshed
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -279,6 +314,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "  examples: --reset all\n"
             "            --reset nine.testrun.org mailchat.pl"
         )
+    # --hosts overrides relay files entirely, so it has no relay_files for the
+    # periodic --auto-fetch refresh to merge into; the two are contradictory.
+    if args.hosts is not None and args.auto_fetch is not None:
+        parser.error("--hosts and --auto-fetch are mutually exclusive")
     env_specs = os.environ.get("CHATMAIL_EXTRA_TURN", "").split()
     args.extra_turn_map = _parse_extra_turns(env_specs)
     return args
@@ -301,7 +340,10 @@ def reset_accounts(cache_dir: Path, domains: list[str]) -> None:
             "  scripts/cleanup_accounts.py --apply  (trim excess accounts)"
         )
     for child in cache_dir.iterdir():
-        if child.is_dir() and child.name != "alive-check":
+        # Only wipe prober-owned throwaway pool dirs; never alive-check (its
+        # long-lived persistent accounts are valuable) and never unrelated
+        # dirs a user may have placed under the cache root.
+        if child.is_dir() and (child.name.startswith("worker-") or child.name == "scan"):
             shutil.rmtree(child)
             log.info("Reset: removed %s", child)
 
@@ -470,19 +512,9 @@ def main(argv: list[str] | None = None) -> None:
             interval = args.alive_check_interval
             if interval == 0 or time.monotonic() - last_alive_check >= interval:
                 if args.auto_fetch:
-                    try:
-                        fetch_relay_list(AUTO_FETCH_URL, args.auto_fetch)
-                        refreshed = read_relay_list(relay_files)
-                        if refreshed != all_relays:
-                            added = set(refreshed) - set(all_relays)
-                            removed = set(all_relays) - set(refreshed)
-                            if added:
-                                log.warning("Relay list: %d new: %s", len(added), ", ".join(added))
-                            if removed:
-                                log.warning("Relay list: %d removed: %s", len(removed), ", ".join(removed))
-                            all_relays = refreshed
-                    except Exception as e:
-                        log.warning("Failed to refresh relay list: %s", e)
+                    all_relays = _refresh_relay_list(
+                        AUTO_FETCH_URL, args.auto_fetch, relay_files, all_relays
+                    )
                 phase[0] = "alive check"
                 relays, previously_dead = check_relays_alive(
                     all_relays, args, cache_dir, previously_dead=previously_dead,
