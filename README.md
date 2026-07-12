@@ -1,5 +1,9 @@
 # chatmail-prober
 
+[![CI](https://github.com/zedRus25/chatmail-prober/actions/workflows/ci.yml/badge.svg)](https://github.com/zedRus25/chatmail-prober/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Delta Chat core 2.53+](https://img.shields.io/badge/deltachat--core-2.53%2B-6c4bd8.svg)](https://github.com/deltachat/deltachat-core-rust)
+
 Smokeping-style Prometheus exporter for [chatmail](https://chatmail.at) relay interoperability monitoring.
 
 Periodically probes all pairs of configured chatmail relays using direct
