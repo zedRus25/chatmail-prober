@@ -11,6 +11,7 @@ import ipaddress
 import queue
 import random
 import string
+import threading
 import time
 import urllib.parse
 from dataclasses import dataclass
@@ -83,6 +84,26 @@ class AccountMaker:
         self.dc = dc
         self.online: list[Any] = []
         self.max_accounts_per_domain = max_accounts_per_domain
+        # A single maker is shared across threads by the alive-check pool
+        # (one thread per relay, all pointing at this maker).  The
+        # find-or-create body of get_relay_account is check-then-act, so two
+        # threads racing on the *same* domain could both miss the reuse check
+        # and create duplicate accounts / exceed the per-domain limit.  A
+        # per-domain lock serializes that section while leaving different
+        # domains fully parallel.  self.online is only mutated while holding a
+        # domain lock; cross-domain iteration of it in _find_reusable_online
+        # is a read that CPython lists tolerate alongside another domain's
+        # append.
+        self._locks_guard = threading.Lock()
+        self._domain_locks: dict[str, threading.Lock] = {}
+
+    def _domain_lock(self, domain: str) -> threading.Lock:
+        """Return the (lazily created) lock guarding setup for *domain*."""
+        with self._locks_guard:
+            lock = self._domain_locks.get(domain)
+            if lock is None:
+                lock = self._domain_locks[domain] = threading.Lock()
+            return lock
 
     def wait_account_online(self, account: Any, timeout: float | None = None) -> None:
         """Wait for a single account to reach IMAP_INBOX_IDLE."""
@@ -180,45 +201,48 @@ class AccountMaker:
         _exclude = exclude or ()
         _wid = f"w{worker_id}" if worker_id is not None else "w?"
 
-        reusable, addr = self._find_reusable_online(domain, _exclude)
-        if reusable is not None:
-            log.info("account_reused", relay=domain, addr=addr, worker=_wid)
-            return reusable, True
+        # Serialize the find-or-create section per domain so concurrent
+        # callers for the same relay can't race into duplicate accounts.
+        with self._domain_lock(domain):
+            reusable, addr = self._find_reusable_online(domain, _exclude)
+            if reusable is not None:
+                log.info("account_reused", relay=domain, addr=addr, worker=_wid)
+                return reusable, True
 
-        log.debug("setup_start", relay=domain, worker=_wid)
-        setup_start = time.time()
+            log.debug("setup_start", relay=domain, worker=_wid)
+            setup_start = time.time()
 
-        scan = self._scan_db_for_domain(domain, _exclude)
+            scan = self._scan_db_for_domain(domain, _exclude)
 
-        if scan.found is not None:
-            addr = scan.found.get_config("configured_addr") or "unknown"
-            log.info("account_resumed", relay=domain, addr=addr,
-                     worker=_wid, total=scan.total)
-        elif scan.found_unconfigured is not None:
-            scan.found = scan.found_unconfigured
-            log.info("account_resuming_unconfigured", relay=domain,
-                     worker=_wid, total=scan.total,
-                     unconfigured=scan.unconfigured)
-        else:
-            if scan.total >= self.max_accounts_per_domain:
-                raise PingError(
-                    f"Too many accounts for {domain} ({scan.total}, "
-                    f"{scan.unconfigured} unconfigured), "
-                    f"refusing to create more (limit {self.max_accounts_per_domain})"
-                )
-            scan.found = self.dc.add_account()
-            qr_url = create_qr_url(domain)
-            scan.found.set_config_from_qr(qr_url)
-            # Lazy import: metrics.py -> probe.py -> accounts.py would cycle.
-            from chatmail_prober.metrics import account_creations_total  # noqa: PLC0415
-            account_creations_total.labels(relay=domain).inc()
-            reason = "no_accounts" if scan.total == 0 else "all_online"
-            log.warning("account_created", relay=domain,
-                        total=scan.total + 1,
-                        unconfigured=scan.unconfigured,
-                        reason=reason, worker=_wid)
+            if scan.found is not None:
+                addr = scan.found.get_config("configured_addr") or "unknown"
+                log.info("account_resumed", relay=domain, addr=addr,
+                         worker=_wid, total=scan.total)
+            elif scan.found_unconfigured is not None:
+                scan.found = scan.found_unconfigured
+                log.info("account_resuming_unconfigured", relay=domain,
+                         worker=_wid, total=scan.total,
+                         unconfigured=scan.unconfigured)
+            else:
+                if scan.total >= self.max_accounts_per_domain:
+                    raise PingError(
+                        f"Too many accounts for {domain} ({scan.total}, "
+                        f"{scan.unconfigured} unconfigured), "
+                        f"refusing to create more (limit {self.max_accounts_per_domain})"
+                    )
+                scan.found = self.dc.add_account()
+                qr_url = create_qr_url(domain)
+                scan.found.set_config_from_qr(qr_url)
+                # Lazy import: metrics.py -> probe.py -> accounts.py would cycle.
+                from chatmail_prober.metrics import account_creations_total  # noqa: PLC0415
+                account_creations_total.labels(relay=domain).inc()
+                reason = "no_accounts" if scan.total == 0 else "all_online"
+                log.warning("account_created", relay=domain,
+                            total=scan.total + 1,
+                            unconfigured=scan.unconfigured,
+                            reason=reason, worker=_wid)
 
-        self._add_online(scan.found)
-        log.debug("setup_done", relay=domain, worker=_wid,
-                  elapsed_s=round(time.time() - setup_start, 3))
-        return scan.found, False
+            self._add_online(scan.found)
+            log.debug("setup_done", relay=domain, worker=_wid,
+                      elapsed_s=round(time.time() - setup_start, 3))
+            return scan.found, False

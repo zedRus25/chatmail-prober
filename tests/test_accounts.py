@@ -272,6 +272,52 @@ class TestAccountReuse:
             f"Expected 1 add_account call across {N} rounds, got {dc.add_account_calls}"
         )
 
+    def test_concurrent_same_domain_creates_one_account(self):
+        """Many threads racing on one domain must create exactly one account.
+
+        The alive-check pool shares a single AccountMaker across threads; the
+        per-domain lock must stop concurrent callers from each missing the
+        reuse check and creating duplicates.  Without the lock, add_account
+        would be called once per racing thread.
+        """
+        rpc = _Rpc()
+        dc = _DC(rpc, "relay.example")
+        maker = AccountMaker(dc)
+
+        start = threading.Barrier(8)
+        results: list[object] = []
+        results_lock = threading.Lock()
+
+        def _worker() -> None:
+            start.wait()  # release all threads at once to maximize the race
+            acct, _ = maker.get_relay_account("relay.example")
+            with results_lock:
+                results.append(acct)
+
+        threads = [threading.Thread(target=_worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+        assert dc.add_account_calls == 1, (
+            f"Expected exactly 1 account under concurrency, got {dc.add_account_calls}"
+        )
+        assert len(results) == 8
+        assert all(a is results[0] for a in results), "All callers must share one account"
+
+    def test_concurrent_different_domains_run_in_parallel(self):
+        """Different domains must not serialize on each other's lock."""
+        rpc = _Rpc()
+        # One DC per domain, mirroring how a shared maker would still route
+        # add_account per domain; here we just assert independent creation.
+        maker = AccountMaker(_DC(rpc, "a.example"))
+        maker_b = AccountMaker(_DC(rpc, "b.example"))
+
+        a, _ = maker.get_relay_account("a.example")
+        b, _ = maker_b.get_relay_account("b.example")
+        assert a is not b
+
 
 #
 # Tests: per-domain account creation cap

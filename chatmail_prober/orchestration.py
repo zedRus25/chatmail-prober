@@ -6,7 +6,6 @@ import os
 import shutil
 import signal
 import statistics
-import subprocess
 import threading
 import time
 from concurrent.futures import (
@@ -41,6 +40,7 @@ from .metrics import (
 )
 from .output import write_textfile
 from .probe import ProbeResult, RelayPool, run_probe
+from .proc_utils import rpc_server_pids
 from .turn import TurnResolved, TurnStatus, check_turn, resolve_relay_turn
 
 log = get_logger(__name__)
@@ -82,36 +82,32 @@ def _try_reopen_pool(
 
 
 def kill_stale_rpc_servers(cache_dir: str | Path, graceful: bool = True) -> None:
-    """Kill orphaned deltachat-rpc-server processes matching our cache_dir.
+    """Kill orphaned deltachat-rpc-server processes rooted at cache_dir.
 
     graceful=True sends SIGTERM first (lets sqlite close WAL cleanly);
     graceful=False goes straight to SIGKILL (used during signal-handler shutdown).
+
+    Processes are matched by their DC_ACCOUNTS_PATH environment variable (the
+    rpc client passes the accounts dir there, not on argv), so this is
+    Linux-only; elsewhere rpc_server_pids returns an empty list.
     """
-    cache_str = str(cache_dir)
-    try:
-        result = subprocess.run(
-            ["pgrep", "-f", f"deltachat-rpc-server.*{cache_str}"],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode != 0:
-            return
-        pids = [int(p) for p in result.stdout.strip().split()]
-        if graceful:
-            for pid in pids:
-                log.warning("Sending SIGTERM to stale deltachat-rpc-server (PID %d)", pid)
-                try:
-                    os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    continue
-            time.sleep(2)
+    pids = rpc_server_pids(cache_dir)
+    if not pids:
+        return
+    if graceful:
         for pid in pids:
+            log.warning("Sending SIGTERM to stale deltachat-rpc-server (PID %d)", pid)
             try:
-                os.kill(pid, signal.SIGKILL)
-                log.warning("Sent SIGKILL to deltachat-rpc-server (PID %d)", pid)
+                os.kill(pid, signal.SIGTERM)
             except ProcessLookupError:
-                pass  # already exited from SIGTERM
-    except (FileNotFoundError, ValueError):
-        pass
+                continue
+        time.sleep(2)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+            log.warning("Sent SIGKILL to deltachat-rpc-server (PID %d)", pid)
+        except ProcessLookupError:
+            pass  # already exited from SIGTERM
 
 
 def _get_relay_account(

@@ -36,6 +36,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from chatmail_prober.accounts import AccountMaker
+from chatmail_prober.proc_utils import rpc_server_pids
 
 # Single source of truth lives on AccountMaker; the script-side name is just
 # an alias so the existing call sites stay readable.
@@ -108,17 +109,12 @@ def _du_sh(path: Path) -> str:
 
 
 def check_rpc_servers(cache_dir: Path) -> list[int]:
-    """Return PIDs of deltachat-rpc-server processes using this cache dir."""
-    try:
-        result = subprocess.run(
-            ["pgrep", "-f", f"deltachat-rpc-server.*{cache_dir}"],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            return []
-        return [int(p) for p in result.stdout.strip().split() if p.strip()]
-    except (FileNotFoundError, ValueError):
-        return []
+    """Return PIDs of deltachat-rpc-server processes using this cache dir.
+
+    Matches on the DC_ACCOUNTS_PATH env var (the rpc client does not put the
+    accounts dir on argv), so this only works on Linux.
+    """
+    return rpc_server_pids(cache_dir)
 
 
 def read_account_domain(pool_dir: Path, acct_dir_name: str) -> str | None:
