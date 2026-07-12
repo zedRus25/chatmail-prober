@@ -3,6 +3,8 @@ name = "chatmail-prober"
 dynamic = ["version"]
 description = "Smokeping-style Prometheus exporter for chatmail relay interoperability monitoring"
 requires-python = ">=3.10"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     "prometheus-client>=0.20",
     "structlog>=24.0",
