@@ -1,0 +1,8 @@
+selected_account = 1
+next_id = 2
+accounts_order = [1]
+
+[[accounts]]
+id = 1
+dir = "f2a849e8-ef02-4b4b-ad86-28aa8c2f31ce"
+uuid = "f2a849e8-ef02-4b4b-ad86-28aa8c2f31ce"

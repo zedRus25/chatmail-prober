@@ -29,6 +29,9 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.6",
     "mypy>=1.11",
+    # scripts/{migrate,cleanup}_accounts.py read TOML; tomllib is stdlib only
+    # on 3.11+, so back-fill tomli on 3.10 (used by the layout-upgrade tests).
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [dependency-groups]
@@ -36,6 +39,9 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.6",
     "mypy>=1.11",
+    # scripts/{migrate,cleanup}_accounts.py read TOML; tomllib is stdlib only
+    # on 3.11+, so back-fill tomli on 3.10 (used by the layout-upgrade tests).
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [tool.ruff]
