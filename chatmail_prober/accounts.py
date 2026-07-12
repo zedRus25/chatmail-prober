@@ -131,7 +131,9 @@ class AccountMaker:
     def _add_online(self, account: Any) -> None:
         account.set_config("bot", "1")
         account.set_config("delete_device_after", "3600")
-        account.set_config("delete_server_after", "3600")
+        # delete_server_after was removed from core in 2.5x ("unknown key"),
+        # and chatmail relays delete messages server-side after delivery
+        # anyway, so it is redundant here.  Setting it would raise on >=2.53.
         account.start_io()
         self.online.append(account)
 

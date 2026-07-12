@@ -84,14 +84,14 @@ def test_account_creation_and_enumeration(dc):
 
 
 def test_config_read_write_surface(dc):
-    """accounts._add_online sets bot/delete_* ; imap_metadata reads addr/mail_pw."""
+    """accounts._add_online sets bot + delete_device_after; imap_metadata reads
+    addr/mail_pw.  (delete_server_after was removed from core in 2.5x, so the
+    prober no longer sets it -- see AccountMaker._add_online.)"""
     acc = dc.add_account()
     # Unconfigured account: these keys read back empty/None, not an error.
     for key in ("addr", "configured_addr", "mail_pw"):
         acc.get_config(key)  # must not raise
-    for key, val in (("bot", "1"),
-                     ("delete_device_after", "3600"),
-                     ("delete_server_after", "3600")):
+    for key, val in (("bot", "1"), ("delete_device_after", "3600")):
         acc.set_config(key, val)
     assert acc.get_config("bot") == "1"
 
