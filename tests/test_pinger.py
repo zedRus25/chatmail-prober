@@ -8,50 +8,15 @@ returned, causing thread accumulation across probe rounds and eventual OOM.
 The vendored Pinger uses a single-receiver inline loop (no thread pool),
 so "thread leak" here refers only to the _send_thread daemon.
 """
-import queue
 import threading
 import time
 
 from chatmail_prober.probe import Pinger
 
-#
-# Minimal stubs -- just enough interface for Pinger to function without a
-# real deltachat-rpc-server.  All threading primitives are real.
-#
-
-class _Rpc:
-    """RPC stub backed by real queue.Queue instances."""
-
-    def __init__(self):
-        self._queues = {}
-
-    def get_queue(self, account_id):
-        if account_id not in self._queues:
-            self._queues[account_id] = queue.Queue()
-        return self._queues[account_id]
-
-
-class _Account:
-    def __init__(self, rpc, account_id, relay):
-        self._rpc = rpc
-        self.id = account_id
-        self._relay = relay
-
-    def get_config(self, key):
-        return f"user{self.id}@{self._relay}"
-
-    def create_contact(self, other):
-        return _Contact()
-
-
-class _Contact:
-    def create_chat(self):
-        return _Chat()
-
-
-class _Chat:
-    def send_text(self, text):
-        pass  # send_pings calls this; no-op is fine
+# Shared fakes (see tests/_fakes.py). All threading primitives stay real; only
+# the deltachat objects are faked, so Pinger runs without a real rpc-server.
+from tests._fakes import FakeAccount as _Account
+from tests._fakes import FakeRpc as _Rpc
 
 
 def _make_pinger(count=1, interval=0.0):

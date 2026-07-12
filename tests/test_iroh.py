@@ -34,11 +34,8 @@ def _clear_iroh_metrics():
 
 def _account(addr: str = "u@example.com", pw: str = "secret") -> MagicMock:
     acct = MagicMock()
-    acct.get_config.side_effect = lambda k: {
-        "configured_addr": addr,
-        "addr": addr,
-        "mail_pw": pw,
-    }.get(k)
+    config = {"configured_addr": addr, "addr": addr, "mail_pw": pw}
+    acct.get_config.side_effect = config.get
     return acct
 
 

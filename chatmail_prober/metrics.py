@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from .probe import ProbeResult
     from .turn import TurnResult  # noqa: F401
 
-from .iroh import IrohStatus
-
 from prometheus_client import (
     CollectorRegistry,
     Counter,
@@ -24,6 +22,7 @@ from prometheus_client import (
 )
 
 from .accounts import is_ip_address
+from .iroh import IrohStatus
 from .probe import _classify_error
 
 # Suppress the _created timestamp lines added by prometheus_client for each

@@ -1,0 +1,38 @@
+name: Live probes
+
+# Real end-to-end probes against real chatmail relays.  These create actual
+# accounts on third-party relays and send real messages, so they run on a
+# schedule (weekly) and on demand -- NOT on every push/PR (that would hammer
+# volunteer relay infrastructure and make PRs flaky on relay downtime).
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      relays:
+        description: "Comma-separated relays to probe (blank = relays.txt.example)"
+        required: false
+        default: ""
+
+concurrency:
+  group: live  # never run two live probe jobs at once
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Live probes against real relays
+        # Empty CMPING_LIVE_TEST -> test_live.py falls back to relays.txt.example.
+        env:
+          CMPING_LIVE_TEST: ${{ github.event.inputs.relays }}
+        run: uv run pytest tests/test_live.py -v

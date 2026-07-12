@@ -24,7 +24,7 @@ ENTRY = "/shared/vendor/deltachat/irohrelay"
 
 def _account_with(config: dict[str, str | None]) -> MagicMock:
     acct = MagicMock()
-    acct.get_config.side_effect = lambda k: config.get(k)
+    acct.get_config.side_effect = config.get
     return acct
 
 

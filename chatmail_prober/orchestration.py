@@ -8,6 +8,7 @@ import signal
 import statistics
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import (
     Future,
     ThreadPoolExecutor,
@@ -17,13 +18,12 @@ from concurrent.futures import (
     TimeoutError as FuturesTimeoutError,
 )
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 import structlog
 
-from .log_config import get_logger
 from .iroh import IrohResult, IrohStatus, check_relay_iroh
+from .log_config import get_logger
 from .metrics import (
     _TRANSIENT_ALIVE_STATUSES,
     clear_stale_labels,
@@ -181,7 +181,7 @@ def _run_aux_checks(
     alive_relays: list[str],
     workers: int,
     deadline_s: float,
-    submit: Callable[[ThreadPoolExecutor, RelayPool, str], Future],
+    submit: Callable[[ThreadPoolExecutor, RelayPool, str], Future[None]],
     on_failure: Callable[[str, BaseException], None],
     on_timeout: Callable[[str], None],
 ) -> None:

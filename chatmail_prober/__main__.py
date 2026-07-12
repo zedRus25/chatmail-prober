@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> None:
 
     start_time = time.time()
     try:
-        from ._version import __version__ as _pkg_version
+        from ._version import __version__ as _pkg_version  # noqa: PLC0415
     except ImportError:
         _pkg_version = "unknown"
     log.debug("chatmail-prober %s starting at %s",

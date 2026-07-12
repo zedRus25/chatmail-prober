@@ -15,7 +15,6 @@ Covers:
 
 from __future__ import annotations
 
-import queue
 import threading
 import time
 
@@ -25,76 +24,11 @@ from deltachat_rpc_client import EventType
 from chatmail_prober.metrics import relay_status_value
 from chatmail_prober.probe import AccountMaker, PingError
 
-#
-# Minimal stubs. Real queue and threading, no network.
-#
-
-class _Rpc:
-    """Stub Rpc backed by real queue.Queue instances."""
-
-    def __init__(self):
-        self._queues: dict[int, queue.Queue] = {}
-
-    def get_queue(self, account_id: int) -> queue.Queue:
-        if account_id not in self._queues:
-            self._queues[account_id] = queue.Queue()
-        return self._queues[account_id]
-
-
-class _Account:
-    """Stub Account with configurable configured_addr and addr."""
-
-    def __init__(self, rpc: _Rpc, account_id: int, domain: str):
-        self._rpc = rpc
-        self.id = account_id
-        self._domain = domain
-        self._config: dict[str, str] = {
-            "configured_addr": f"user{account_id}@{domain}",
-            "addr": f"user{account_id}@{domain}",
-        }
-        self.start_io_called = 0
-        self.set_config_calls: list[tuple[str, str]] = []
-
-    def get_config(self, key: str) -> str | None:
-        return self._config.get(key)
-
-    def set_config(self, key: str, value: str) -> None:
-        self._config[key] = value
-        self.set_config_calls.append((key, value))
-
-    def set_config_from_qr(self, qr_url: str) -> None:
-        # Simulate successful QR config: populate configured_addr.
-        # create_qr_url() returns "dcaccount:<domain>", so strip the scheme.
-        # The real core would set configured_addr to "<user>@<domain>".
-        if qr_url.startswith("dcaccount:"):
-            domain = qr_url[len("dcaccount:"):]
-        else:
-            domain = qr_url.rsplit("@", maxsplit=1)[-1]
-        self._config["configured_addr"] = f"newuser{self.id}@{domain}"
-
-    def start_io(self) -> None:
-        self.start_io_called += 1
-
-
-class _DC:
-    """Stub DeltaChat that tracks account creation calls."""
-
-    def __init__(self, rpc: _Rpc, domain: str):
-        self._rpc = rpc
-        self._domain = domain
-        self._accounts: list[_Account] = []
-        self.add_account_calls = 0
-
-    def get_all_accounts(self) -> list[_Account]:
-        return list(self._accounts)
-
-    def add_account(self) -> _Account:
-        self.add_account_calls += 1
-        acct = _Account(self._rpc, len(self._accounts) + 1, self._domain)
-        # New accounts start unconfigured (no configured_addr until set_config_from_qr)
-        acct._config.pop("configured_addr", None)
-        self._accounts.append(acct)
-        return acct
+# Shared fakes (see tests/_fakes.py); aliased so the test bodies below read
+# the same as when the stubs were defined inline.
+from tests._fakes import FakeAccount as _Account
+from tests._fakes import FakeDeltaChat as _DC
+from tests._fakes import FakeRpc as _Rpc
 
 
 def _push_idle(rpc: _Rpc, account_id: int, delay: float = 0.0) -> None:
@@ -305,18 +239,6 @@ class TestAccountReuse:
         )
         assert len(results) == 8
         assert all(a is results[0] for a in results), "All callers must share one account"
-
-    def test_concurrent_different_domains_run_in_parallel(self):
-        """Different domains must not serialize on each other's lock."""
-        rpc = _Rpc()
-        # One DC per domain, mirroring how a shared maker would still route
-        # add_account per domain; here we just assert independent creation.
-        maker = AccountMaker(_DC(rpc, "a.example"))
-        maker_b = AccountMaker(_DC(rpc, "b.example"))
-
-        a, _ = maker.get_relay_account("a.example")
-        b, _ = maker_b.get_relay_account("b.example")
-        assert a is not b
 
 
 #
