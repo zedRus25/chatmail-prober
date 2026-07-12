@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 # Status value-mappings shared between the TURN and iroh state-timelines.
 _TURN_STATUS_MAPPINGS = {
     "1":  {"text": "ok",        "color": "green"},

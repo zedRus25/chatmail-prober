@@ -19,7 +19,6 @@ import re
 import sys
 from pathlib import Path
 
-
 #
 # Parsing helpers
 #

@@ -24,27 +24,24 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
 import sys
+
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 from pathlib import Path
 
+from chatmail_prober.proc_utils import rpc_server_pids
+
 
 def check_rpc_servers(cache_dir: Path) -> list[int]:
-    """Return PIDs of deltachat-rpc-server processes using this cache dir."""
-    try:
-        result = subprocess.run(
-            ["pgrep", "-f", f"deltachat-rpc-server.*{cache_dir}"],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            return []
-        return [int(p) for p in result.stdout.strip().split() if p.strip()]
-    except (FileNotFoundError, ValueError):
-        return []
+    """Return PIDs of deltachat-rpc-server processes using this cache dir.
+
+    Matches on the DC_ACCOUNTS_PATH env var (the rpc client does not put the
+    accounts dir on argv), so this only works on Linux.
+    """
+    return rpc_server_pids(cache_dir)
 
 
 def parse_accounts_toml(path: Path) -> list[dict]:

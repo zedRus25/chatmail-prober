@@ -28,6 +28,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -102,7 +103,7 @@ def _clear_messages(db: Path) -> int:
 def _du_sh(path: Path) -> str:
     """Return human-readable disk usage for path (like du -sh)."""
     try:
-        result = subprocess.run(["du", "-sh", str(path)], capture_output=True, text=True)
+        result = subprocess.run(["du", "-sh", str(path)], capture_output=True, text=True, check=False)
         return result.stdout.split()[0] if result.stdout else "?"
     except Exception:
         return "?"

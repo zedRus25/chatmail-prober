@@ -26,10 +26,10 @@ test-live:
 	$(UV) run python -m pytest tests/test_live.py
 
 lint:
-	$(UV) run ruff check chatmail_prober tests
+	$(UV) run ruff check chatmail_prober tests scripts grafana
 
 format:
-	$(UV) run ruff format chatmail_prober tests
+	$(UV) run ruff format chatmail_prober tests scripts grafana
 
 typecheck:
 	$(UV) run mypy chatmail_prober

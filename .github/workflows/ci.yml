@@ -31,7 +31,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Lint
-        run: uv run ruff check chatmail_prober tests
+        run: uv run ruff check chatmail_prober tests scripts grafana
 
       - name: Typecheck
         run: uv run mypy chatmail_prober
